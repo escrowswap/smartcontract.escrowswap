@@ -77,11 +77,15 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferAccepted(id);
     }
 
-    function adjustTradeOffer() external  {
-
+    function adjustTradeOffer(uint256 id) external {
+        TradeOffer storage trade = tradeOffers[id];
     }
 
     function cancelTradeOffer() external {
+
+    }
+
+    function getTradeOffers() external {
 
     }
 

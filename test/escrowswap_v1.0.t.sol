@@ -11,7 +11,8 @@ contract EscrowswapV1Test is Test {
         escrowswap = new EscrowswapV1();
     }
 
-    /* function testIncrement() public {
+    /*
+     function testIncrement() public {
         escrowswap.increment();
         assertEq(counter.number(), 1);
     }
