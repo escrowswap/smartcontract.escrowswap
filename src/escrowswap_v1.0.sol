@@ -59,9 +59,9 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
     }
 
-    function acceptTradeOffer(uint256 id) external {
-        tradeOffers[id].buyer = msg.sender;
-        TradeOffer storage trade = tradeOffers[id];
+    function acceptTradeOffer(uint256 _id) external {
+        tradeOffers[_id].buyer = msg.sender;
+        TradeOffer storage trade = tradeOffers[_id];
 
         IERC20(trade.tokenRequested).transferFrom(
             msg.sender,
@@ -74,15 +74,25 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             trade.amountOffered
         );
 
-        emit TradeOfferAccepted(id);
+        emit TradeOfferAccepted(_id);
     }
 
-    function adjustTradeOffer(uint256 id) external {
-        TradeOffer storage trade = tradeOffers[id];
+    function adjustTradeOffer(uint256 _id, uint256 _amountOfferedUpdated, uint256 _amountRequestedUpdated) external {
+        TradeOffer storage trade = tradeOffers[_id];
+        require(trade.seller == msg.sender, "Unauthorized access to the trade.");
+
+        trade.amountOffered = _amountOfferedUpdated;
+        trade.amountRequested = _amountRequestedUpdated;
+
+        emit TradeOfferAdjusted(_id, _amountOfferedUpdated, _amountRequestedUpdated);
     }
 
-    function cancelTradeOffer() external {
+    function cancelTradeOffer(uint256 _id) external {
+        TradeOffer storage trade = tradeOffers[_id];
+        require(trade.seller == msg.sender, "Unauthorized access to the trade.");
+        delete tradeOffers[_id];
 
+        emit TradeOfferCancelled(_id);
     }
 
     function getTradeOffers() external {
