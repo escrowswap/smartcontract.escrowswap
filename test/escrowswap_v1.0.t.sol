@@ -2,23 +2,22 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../src/Counter.sol";
+import "../src/escrowswap_v1.0.sol";
 
-contract CounterTest is Test {
-    Counter public counter;
+contract EscrowswapV1Test is Test {
+    EscrowswapV1 public escrowswap;
 
     function setUp() public {
-        counter = new Counter();
-        counter.setNumber(0);
+        escrowswap = new EscrowswapV1();
     }
 
-    function testIncrement() public {
-        counter.increment();
+    /* function testIncrement() public {
+        escrowswap.increment();
         assertEq(counter.number(), 1);
     }
 
     function testSetNumber(uint256 x) public {
         counter.setNumber(x);
         assertEq(counter.number(), x);
-    }
+    } */
 }
