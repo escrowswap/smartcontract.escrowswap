@@ -2,40 +2,41 @@
 pragma solidity ^0.8.13;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
-
-
-interface IERC20 {
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-}
+import "src/resources/IERC20.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
         address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
     event TradeOfferAdjusted(uint256 id, uint256 indexed amountOfferedUpdated, uint256 amountRequestedUpdated); //can be vulnerable when user pays and then this happens
-    event TradeOfferAccepted(uint256 id);
+    event TradeOfferAccepted(uint256 id, address indexed buyer);
     event TradeOfferCancelled(uint256 id);
 
     TradeOffer[] public tradeOffers;
+
+    //Max and min costs to prevent over/under paying mistakes.
+    uint256 public MAX_COST = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    uint256 public MIN_COST = 1; //Min of 0.1 USDC
 
     // Getting packed by bit-shifting
     struct TradeOffer {
         uint256 id;
         address seller;
-        address buyer;
+        //address buyer;
         address tokenOffered;
         address tokenRequested;
         uint256 amountOffered;
         uint256 amountRequested;
-        bool usingCollateral; // questionable, might be changed later
     }
 
     constructor() {
     }
 
-    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external payable nonReentrant {
+    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external nonReentrant {
+        require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
+        require(_amountOffered >= MIN_COST && _amountRequested >= MIN_COST, "Below min cost");
+        require(_amountOffered <= MAX_COST && _amountRequested <= MAX_COST, "Above max cost");
+
         IERC20(_tokenOffered).transferFrom(
             msg.sender,
             address(this),
@@ -45,12 +46,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         TradeOffer memory newOffer = TradeOffer({
             id: tradeOffers.length,
             seller: msg.sender,
-            buyer: address(0),
+            //buyer: address(0),
             tokenOffered: _tokenOffered,
             tokenRequested: _tokenRequested,
             amountOffered: _amountOffered,
-            amountRequested: _amountRequested,
-            usingCollateral: false
+            amountRequested: _amountRequested
         });
 
         tradeOffers.push(newOffer);
@@ -60,8 +60,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     }
 
     function acceptTradeOffer(uint256 _id) external {
-        tradeOffers[_id].buyer = msg.sender;
         TradeOffer storage trade = tradeOffers[_id];
+
+        require(IERC20(_tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
+            "Insufficient balance of requested tokens.");
 
         IERC20(trade.tokenRequested).transferFrom(
             msg.sender,
@@ -74,7 +76,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             trade.amountOffered
         );
 
-        emit TradeOfferAccepted(_id);
+        emit TradeOfferAccepted(_id, msg.sender);
     }
 
     function adjustTradeOffer(uint256 _id, uint256 _amountOfferedUpdated, uint256 _amountRequestedUpdated) external {
