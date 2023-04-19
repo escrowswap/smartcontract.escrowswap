@@ -79,4 +79,40 @@ contract EscrowswapV1Test is Test {
 
         vm.stopPrank();
     }
+
+    function testAdjustTradeOffer() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 10;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        uint256 amount_changed = 5;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+
+        escrowswap.adjustTradeOffer(0, address(tokenOffered), amount_changed);
+        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenOffered), "No change has been made to token requested.");
+        assertEq(escrowswap.getTradeOffer(0).amountRequested, amount_changed, "No change has been made to the amount of token requested.");
+        vm.stopPrank();
+    }
+
+    function testAdjustTradeOfferUnauthorized() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        vm.stopPrank();
+
+        //transaction fails because of unauthorized access
+        vm.startPrank(sellerBad);
+        vm.expectRevert();
+        escrowswap.adjustTradeOffer(0, address(tokenOffered), 5);
+        vm.stopPrank();
+    }
+
+
 }

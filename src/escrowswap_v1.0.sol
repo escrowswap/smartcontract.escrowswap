@@ -8,7 +8,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
         address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
-    event TradeOfferAdjusted(uint256 id, uint256 indexed amountOfferedUpdated, uint256 amountRequestedUpdated); //can be vulnerable when user pays and then this happens
+    event TradeOfferAdjusted(uint256 id, address tokenRequestedUpdated, uint256 amountRequestedUpdated); //can be vulnerable when user pays and then this happens
     event TradeOfferAccepted(uint256 id, address indexed buyer);
     event TradeOfferCancelled(uint256 id);
 
@@ -27,9 +27,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         address tokenRequested;
         uint256 amountOffered;
         uint256 amountRequested;
-    }
-
-    constructor() {
     }
 
     function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external nonReentrant {
@@ -59,10 +56,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
     }
 
-    function acceptTradeOffer(uint256 _id) external {
+    function acceptTradeOffer(uint256 _id) external nonReentrant {
         TradeOffer storage trade = tradeOffers[_id];
 
-        require(IERC20(_tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
+        require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
             "Insufficient balance of requested tokens.");
 
         IERC20(trade.tokenRequested).transferFrom(
@@ -76,29 +73,35 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             trade.amountOffered
         );
 
+        deleteTradeOffer(_id);
+
         emit TradeOfferAccepted(_id, msg.sender);
     }
 
-    function adjustTradeOffer(uint256 _id, uint256 _amountOfferedUpdated, uint256 _amountRequestedUpdated) external {
+    function adjustTradeOffer(uint256 _id, address _tokenRequestedUpdated, uint256 _amountRequestedUpdated) external {
         TradeOffer storage trade = tradeOffers[_id];
         require(trade.seller == msg.sender, "Unauthorized access to the trade.");
 
-        trade.amountOffered = _amountOfferedUpdated;
         trade.amountRequested = _amountRequestedUpdated;
+        trade.tokenRequested = _tokenRequestedUpdated;
 
-        emit TradeOfferAdjusted(_id, _amountOfferedUpdated, _amountRequestedUpdated);
+        emit TradeOfferAdjusted(_id, _tokenRequestedUpdated, _amountRequestedUpdated);
     }
 
     function cancelTradeOffer(uint256 _id) external {
         TradeOffer storage trade = tradeOffers[_id];
         require(trade.seller == msg.sender, "Unauthorized access to the trade.");
-        delete tradeOffers[_id];
+        deleteTradeOffer(_id);
 
         emit TradeOfferCancelled(_id);
     }
 
-    function getTradeOffers() external {
+    function deleteTradeOffer(uint256 _id) private {
+        delete tradeOffers[_id];
+    }
 
+    function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
+        return tradeOffers[_id];
     }
 
     function setFeeLevel(uint8 fee) external onlyOwner {
