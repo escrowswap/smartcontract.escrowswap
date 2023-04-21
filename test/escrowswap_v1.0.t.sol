@@ -114,5 +114,42 @@ contract EscrowswapV1Test is Test {
         vm.stopPrank();
     }
 
+    function testCancelTradeOfferUnauthorized() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        vm.stopPrank();
+
+        //transaction fails because of unauthorized access
+        vm.startPrank(sellerBad);
+        vm.expectRevert();
+        escrowswap.cancelTradeOffer(0);
+        vm.stopPrank();
+    }
+
+    function testCancelTradeOffer() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 seller_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), amount_sell, "Contract has not received the token.");
+        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount - amount_sell, "Contract hasn't received the tokens FROM the seller.");
+
+        escrowswap.cancelTradeOffer(0);
+
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens have not been sent back.");
+        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been sent back TO THE RIGHTFUL SELLER.");
+
+        vm.stopPrank();
+    }
+
 
 }
