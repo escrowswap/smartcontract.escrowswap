@@ -6,6 +6,12 @@ import "src/resources/IERC20.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
+    event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
+        address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
+    event TradeOfferAdjusted(uint256 id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
+    event TradeOfferAccepted(uint256 id, address indexed buyer);
+    event TradeOfferCancelled(uint256 id);
+
     struct TradeOffer {
         address seller;
         //address buyer;
@@ -15,17 +21,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 amountRequested;
     }
 
-    uint256 EMERGENCY_WITHDRAWAL = false;
+    bool EMERGENCY_WITHDRAWAL = false;
     uint256 public MAX_COST = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     uint256 public MIN_COST = 0;
 
     uint256 private id_counter;
-
-    event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
-        address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
-    event TradeOfferAdjusted(uint256 id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
-    event TradeOfferAccepted(uint256 id, address indexed buyer);
-    event TradeOfferCancelled(uint256 id);
 
     constructor() {
         id_counter = 0;
