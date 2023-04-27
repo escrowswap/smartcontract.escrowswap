@@ -7,7 +7,6 @@ import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-
     event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
         address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
     event TradeOfferAdjusted(uint256 id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
@@ -23,22 +22,16 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 amountRequested;
     }
 
-    bool EMERGENCY_WITHDRAWAL = false;
-    uint256 public MAX_COST = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
-    uint256 public MIN_COST = 0;
-
     uint256 private id_counter;
+    bool private EMERGENCY_WITHDRAWAL = false;
+    mapping(uint256 => TradeOffer) public tradeOffers;
 
     constructor() {
         id_counter = 0;
     }
 
-    mapping(uint256 => TradeOffer) public tradeOffers;
-
     function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external nonReentrant nonEmergencyCall {
         require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
-        require(_amountOffered >= MIN_COST && _amountRequested >= MIN_COST, "Below min cost");
-        require(_amountOffered <= MAX_COST && _amountRequested <= MAX_COST, "Above max cost");
 
         TradeOffer memory newOffer = TradeOffer({
             seller: msg.sender,
@@ -93,15 +86,19 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     }
 
     function cancelTradeOffer(uint256 _id) external nonReentrant {
-        TradeOffer memory trade = tradeOffers[_id];
-        require(trade.seller == msg.sender, "Unauthorized access to the trade.");
+        //saving gas: only necessary vars in the memory
+        address trade_seller = tradeOffers[_id].seller;
+        uint256 trade_amountOffered = tradeOffers[_id].amountOffered;
+        address trade_tokenOffered = tradeOffers[_id].tokenOffered;
+
+        require(trade_seller == msg.sender, "Unauthorized access to the trade.");
 
         deleteTradeOffer(_id);
         emit TradeOfferCancelled(_id);
 
-        IERC20(trade.tokenOffered).safeTransfer(
-            address(trade.seller),
-            trade.amountOffered
+        IERC20(trade_tokenOffered).safeTransfer(
+            address(trade_seller),
+            trade_amountOffered
         );
     }
 
