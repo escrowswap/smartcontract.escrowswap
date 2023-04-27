@@ -2,9 +2,11 @@
 pragma solidity ^0.8.13;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
-import "src/resources/IERC20.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
 
     event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
         address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
@@ -38,12 +40,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         require(_amountOffered >= MIN_COST && _amountRequested >= MIN_COST, "Below min cost");
         require(_amountOffered <= MAX_COST && _amountRequested <= MAX_COST, "Above max cost");
 
-        IERC20(_tokenOffered).transferFrom(
-            msg.sender,
-            address(this),
-            _amountOffered
-        );
-
         TradeOffer memory newOffer = TradeOffer({
             seller: msg.sender,
             tokenOffered: _tokenOffered,
@@ -53,33 +49,37 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         });
 
         tradeOffers[id_counter] = newOffer;
+        ++id_counter;
 
         emit TradeOfferCreated(id_counter, newOffer.seller, newOffer.tokenOffered,
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
 
-        ++id_counter;
+        IERC20(_tokenOffered).safeTransferFrom(
+            msg.sender,
+            address(this),
+            _amountOffered
+        );
     }
 
     function acceptTradeOffer(uint256 _id) external nonReentrant nonEmergencyCall {
-        TradeOffer storage trade = tradeOffers[_id];
+        TradeOffer memory trade = tradeOffers[_id];
 
         require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
             "Insufficient balance of requested tokens.");
 
-        IERC20(trade.tokenRequested).transferFrom(
+        deleteTradeOffer(_id);
+        emit TradeOfferAccepted(_id, msg.sender);
+
+        IERC20(trade.tokenRequested).safeTransferFrom(
             msg.sender,
             address(trade.seller),
             trade.amountRequested
         );
 
-        IERC20(trade.tokenOffered).transfer(
+        IERC20(trade.tokenOffered).safeTransfer(
             msg.sender,
             trade.amountOffered
         );
-
-        deleteTradeOffer(_id);
-
-        emit TradeOfferAccepted(_id, msg.sender);
     }
 
     function adjustTradeOffer(uint256 _id, address _tokenRequestedUpdated, uint256 _amountRequestedUpdated) external nonEmergencyCall {
@@ -93,21 +93,16 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     }
 
     function cancelTradeOffer(uint256 _id) external nonReentrant {
-        TradeOffer storage trade = tradeOffers[_id];
+        TradeOffer memory trade = tradeOffers[_id];
         require(trade.seller == msg.sender, "Unauthorized access to the trade.");
 
-        IERC20(trade.tokenOffered).transfer(
+        deleteTradeOffer(_id);
+        emit TradeOfferCancelled(_id);
+
+        IERC20(trade.tokenOffered).safeTransfer(
             address(trade.seller),
             trade.amountOffered
         );
-
-        deleteTradeOffer(_id);
-
-        emit TradeOfferCancelled(_id);
-    }
-
-    function deleteTradeOffer(uint256 _id) private nonEmergencyCall {
-        delete tradeOffers[_id];
     }
 
     function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
@@ -119,6 +114,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     function switchEmergencyWithdrawal() external onlyOwner {
         EMERGENCY_WITHDRAWAL = !EMERGENCY_WITHDRAWAL;
+    }
+
+    function deleteTradeOffer(uint256 _id) internal nonEmergencyCall {
+        delete tradeOffers[_id];
     }
 
     modifier nonEmergencyCall() {

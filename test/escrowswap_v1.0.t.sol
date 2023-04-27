@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/escrowswap_v1.0.sol";
-import "../src/resources/IERC20.sol";
+import "../src/resources/IERC20TEST.sol";
 import "test/resources/MockTokenERC20.sol";
 
 contract EscrowswapV1Test is Test {
@@ -13,8 +13,8 @@ contract EscrowswapV1Test is Test {
     address public buyerGood;
     address public buyerBad;
 
-    IERC20 public tokenOffered;
-    IERC20 public tokenRequested;
+    IERC20TEST public tokenOffered;
+    IERC20TEST public tokenRequested;
 
     function setUp() public {
         escrowswap = new EscrowswapV1();
@@ -26,8 +26,8 @@ contract EscrowswapV1Test is Test {
         buyerBad = vm.addr(4);
 
         // Deploy a mock ERC20 token for testing
-        tokenOffered = IERC20(address(new MockTokenERC20("My Token1", "MTK1", 18)));
-        tokenRequested = IERC20(address(new MockTokenERC20("My Token2", "MTK2", 18)));
+        tokenOffered = IERC20TEST(address(new MockTokenERC20("My Token1", "MTK1", 18)));
+        tokenRequested = IERC20TEST(address(new MockTokenERC20("My Token2", "MTK2", 18)));
 
         // Mint tokens for the test accounts
         tokenOffered.mint(sellerGood, 1000);

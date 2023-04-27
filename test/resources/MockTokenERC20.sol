@@ -1,8 +1,8 @@
 pragma solidity ^0.8.0;
 
-import "src/resources/IERC20.sol";
+import "src/resources/IERC20TEST.sol";
 
-contract MockTokenERC20 is IERC20 {
+contract MockTokenERC20 is IERC20TEST {
     string public name;
     string public symbol;
     uint8 public decimals;
