@@ -9,9 +9,9 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
         address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
-    event TradeOfferAdjusted(uint256 id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
-    event TradeOfferAccepted(uint256 id, address indexed buyer);
-    event TradeOfferCancelled(uint256 id);
+    event TradeOfferAdjusted(uint256 indexed id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
+    event TradeOfferAccepted(uint256 indexed id, address indexed buyer);
+    event TradeOfferCancelled(uint256 indexed id);
 
     struct TradeOffer {
         address seller;
@@ -22,8 +22,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 amountRequested;
     }
 
+    mapping(bytes32 => uint256) tradingPairFees;
+
     uint256 private id_counter;
     bool private EMERGENCY_WITHDRAWAL = false;
+    uint256 private BASE_FEE = 2500;
     mapping(uint256 => TradeOffer) public tradeOffers;
 
     constructor() {
@@ -60,6 +63,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
             "Insufficient balance of requested tokens.");
 
+        uint256 fee = tradingPairFees[_getTradingPairHash(trade.tokenRequested, trade.tokenOffered)];
+        if (fee == 0) {
+            fee = BASE_FEE;
+        }
+
         deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
 
@@ -67,6 +75,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             msg.sender,
             address(trade.seller),
             trade.amountRequested
+        );
+
+        IERC20(trade.tokenOffered).safeTransfer(
+            owner(),
+            trade.amountOffered * fee / 100000
         );
 
         IERC20(trade.tokenOffered).safeTransfer(
@@ -115,6 +128,26 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     function deleteTradeOffer(uint256 _id) internal nonEmergencyCall {
         delete tradeOffers[_id];
+    }
+
+    function _getTradingPairHash(address token0, address token1) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(token0, token1));
+    }
+
+    function getTradingPairFee(bytes32 hash) external view returns (uint256)  {
+        return tradingPairFees[hash];
+    }
+
+    function setTradingPairFee(bytes32 hash, uint256 fee) external onlyOwner {
+        tradingPairFees[hash] = fee;
+    }
+
+    function deleteTradingPairFee(bytes32 hash) external onlyOwner {
+        delete tradingPairFees[hash];
+    }
+
+    function setBaseFee(uint256 _fee) external onlyOwner {
+        BASE_FEE = _fee;
     }
 
     modifier nonEmergencyCall() {
