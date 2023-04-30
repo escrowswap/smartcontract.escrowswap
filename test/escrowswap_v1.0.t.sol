@@ -70,7 +70,7 @@ contract EscrowswapV1Test is Test {
 
         vm.startPrank(buyerGood);
         tokenRequested.approve(address(escrowswap), amount_get+5);
-        escrowswap.acceptTradeOffer(0);
+        escrowswap.acceptTradeOffer(0, address(tokenRequested), amount_get);
 
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount.");
         assertEq(tokenRequested.balanceOf(address(sellerGood)), amount_get, "Issue with token amount.");
@@ -153,12 +153,14 @@ contract EscrowswapV1Test is Test {
 
     //=====================TESTING FEE FUNCTIONALITY======================================
 
+    //GAS test
     function testGetTradingPairFee() public  {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         uint256 result = escrowswap.getTradingPairFee(hash);
         assertEq(result, 0, "Non-default fee has been received");
     }
 
+    //GAS test
     function testSetTradingPairFee() public {
         uint256 fee1 = 4500;
         uint256 fee2 = 6500;
@@ -172,6 +174,7 @@ contract EscrowswapV1Test is Test {
         assertEq(result, fee2, "Wrong fee has been received");
     }
 
+    //GAS test
     function testDeleteTradingPairFee() public {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         escrowswap.setTradingPairFee(hash, 4500);
@@ -184,6 +187,7 @@ contract EscrowswapV1Test is Test {
         assertEq(result, 0, "Non-default fee has been received");
     }
 
+    //GAS test
     function testSetBaseFee() public {
         escrowswap.setBaseFee(4500);
     }

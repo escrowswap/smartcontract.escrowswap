@@ -21,16 +21,16 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 amountRequested;
     }
 
-    mapping(bytes32 => uint256) tradingPairFees;
-
-    uint256 private id_counter;
     bool private EMERGENCY_WITHDRAWAL;
+    uint256 private id_counter;
     uint256 private BASE_FEE;
-    mapping(uint256 => TradeOffer) public tradeOffers;
+
+    mapping(uint256 => TradeOffer) private tradeOffers;
+    mapping(bytes32 => uint256) private tradingPairFees;
 
     constructor() {
         id_counter = 0;
-        BASE_FEE = 2500;
+        BASE_FEE = 2500; // 2500 / 100000 = 2.5%
         EMERGENCY_WITHDRAWAL = false;
     }
 
@@ -58,11 +58,13 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         );
     }
 
-    function acceptTradeOffer(uint256 _id) external nonReentrant nonEmergencyCall {
+    function acceptTradeOffer(uint256 _id, address _tokenRequested, uint256 _amountRequested) external nonReentrant nonEmergencyCall {
         TradeOffer memory trade = tradeOffers[_id];
 
+        require(trade.tokenRequested == _tokenRequested, "Trade data misaligned");
+        require(trade.amountRequested == _amountRequested, "Trade data misaligned");
         require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
-            "Insufficient balance of requested tokens.");
+            "Insufficient balance");
 
         uint256 fee = tradingPairFees[_getTradingPairHash(trade.tokenRequested, trade.tokenOffered)];
         if (fee == 0) {
@@ -118,9 +120,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
         return tradeOffers[_id];
-    }
-
-    function setFeeLevel(uint8 fee) external onlyOwner {
     }
 
     function switchEmergencyWithdrawal() external onlyOwner {
