@@ -151,5 +151,40 @@ contract EscrowswapV1Test is Test {
         vm.stopPrank();
     }
 
+    //=====================TESTING FEE FUNCTIONALITY======================================
 
+    function testGetTradingPairFee() public  {
+        bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
+        uint256 result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, 0, "Non-default fee has been received");
+    }
+
+    function testSetTradingPairFee() public {
+        uint256 fee1 = 4500;
+        uint256 fee2 = 6500;
+        bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
+        escrowswap.setTradingPairFee(hash, fee1);
+        uint256 result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, fee1, "Wrong fee has been received");
+
+        escrowswap.setTradingPairFee(hash, fee2);
+        result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, fee2, "Wrong fee has been received");
+    }
+
+    function testDeleteTradingPairFee() public {
+        bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
+        escrowswap.setTradingPairFee(hash, 4500);
+        uint256 result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, 4500, "Different fee has been received");
+
+        escrowswap.deleteTradingPairFee(hash);
+
+        result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, 0, "Non-default fee has been received");
+    }
+
+    function testSetBaseFee() public {
+        escrowswap.setBaseFee(4500);
+    }
 }

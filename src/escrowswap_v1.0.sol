@@ -15,7 +15,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     struct TradeOffer {
         address seller;
-        //address buyer;
         address tokenOffered;
         address tokenRequested;
         uint256 amountOffered;
@@ -25,12 +24,14 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     mapping(bytes32 => uint256) tradingPairFees;
 
     uint256 private id_counter;
-    bool private EMERGENCY_WITHDRAWAL = false;
-    uint256 private BASE_FEE = 2500;
+    bool private EMERGENCY_WITHDRAWAL;
+    uint256 private BASE_FEE;
     mapping(uint256 => TradeOffer) public tradeOffers;
 
     constructor() {
         id_counter = 0;
+        BASE_FEE = 2500;
+        EMERGENCY_WITHDRAWAL = false;
     }
 
     function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external nonReentrant nonEmergencyCall {
