@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IWETH} from "./resources/IWETH.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -24,6 +25,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     bool private EMERGENCY_WITHDRAWAL;
     uint256 private id_counter;
     uint256 private BASE_FEE;
+    IWETH immutable weth;
 
     mapping(uint256 => TradeOffer) private tradeOffers;
     mapping(bytes32 => uint256) private tradingPairFees;
@@ -32,9 +34,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         id_counter = 0;
         BASE_FEE = 2500; // 2500 / 100000 = 2.5%
         EMERGENCY_WITHDRAWAL = false;
+        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
     }
 
-    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external nonReentrant nonEmergencyCall {
+    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) payable external nonReentrant nonEmergencyCall {
         require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
 
         TradeOffer memory newOffer = TradeOffer({
@@ -51,14 +54,66 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferCreated(id_counter, newOffer.seller, newOffer.tokenOffered,
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
 
-        IERC20(_tokenOffered).safeTransferFrom(
+        _handleEscrowTransfer(
             msg.sender,
-            address(this),
-            _amountOffered
+            _amountOffered,
+            _tokenOffered,
+            address(this)
         );
     }
 
-    function acceptTradeOffer(uint256 _id, address _tokenRequested, uint256 _amountRequested) external nonReentrant nonEmergencyCall {
+    // @ ZORA V3
+    function _handleEscrowTransfer(address _sender, uint256 _amount, address _token, address _dest) internal {
+        if (_token == address(0)) {
+            require(msg.value >= _amount, "_handleIncomingTransfer msg value less than expected amount");
+        } else {
+            // We must check the balance that was actually transferred to this contract,
+            // as some tokens impose a transfer fee and would not actually transfer the
+            // full amount to the escrowswap, resulting in potentially locked funds
+            IERC20 token = IERC20(_token);
+            uint256 beforeBalance = token.balanceOf(_dest);
+            token.safeTransferFrom(_sender, _dest, _amount);
+            uint256 afterBalance = token.balanceOf(_dest);
+            require(beforeBalance + _amount == afterBalance, "_handleIncomingTransfer token transfer call did not transfer expected amount");
+        }
+    }
+
+    function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) internal {
+        uint256 fee = tradingPairFees[_getTradingPairHash(_tokenReq, _tokenOff)];
+        if (fee == 0) {
+            fee = BASE_FEE;
+        }
+
+        // FEE Payment transaction
+        _handleEscrowTransfer(
+            msg.sender,
+            _amount * fee / 100000,
+            _tokenReq,
+            owner()
+        );
+    }
+
+    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) internal {
+        if (_amount == 0 || _dest == address(0)) {
+            return;
+        }
+
+        // Handle ETH payment
+        if (_token == address(0)) {
+            require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
+
+            (bool success, ) = _dest.call{value: _amount}("");
+            // If the ETH transfer fails, wrap the ETH and try send it as WETH.
+            if (!success) {
+                weth.deposit{value: _amount}();
+                IERC20(address(weth)).safeTransfer(_dest, _amount);
+            }
+        } else {
+            IERC20(_token).safeTransfer(_dest, _amount);
+        }
+    }
+
+    function acceptTradeOffer(uint256 _id, address _tokenRequested, uint256 _amountRequested) payable external nonReentrant nonEmergencyCall {
         TradeOffer memory trade = tradeOffers[_id];
 
         require(trade.tokenRequested == _tokenRequested, "Trade data misaligned");
@@ -66,29 +121,27 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
             "Insufficient balance");
 
-        uint256 fee = tradingPairFees[_getTradingPairHash(trade.tokenRequested, trade.tokenOffered)];
-        if (fee == 0) {
-            fee = BASE_FEE;
-        }
-
         deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
 
-        IERC20(trade.tokenRequested).safeTransferFrom(
+        //Transfer from buyer to seller.
+        _handleEscrowTransfer(
             msg.sender,
-            address(trade.seller),
-            trade.amountRequested
+            trade.amountRequested,
+            trade.tokenRequested,
+            address(trade.seller)
         );
 
-        IERC20(trade.tokenOffered).safeTransfer(
-            owner(),
-            trade.amountOffered * fee / 100000
+        //Fee Payment calculation and exec.
+        _handleFeePayout(
+            msg.sender,
+            trade.amountRequested,
+            trade.tokenRequested,
+            trade.tokenOffered
         );
 
-        IERC20(trade.tokenOffered).safeTransfer(
-            msg.sender,
-            trade.amountOffered
-        );
+        //Transfer from the vault to buyer.
+        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
     }
 
     function adjustTradeOffer(uint256 _id, address _tokenRequestedUpdated, uint256 _amountRequestedUpdated) external nonEmergencyCall {
@@ -112,10 +165,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         deleteTradeOffer(_id);
         emit TradeOfferCancelled(_id);
 
-        IERC20(trade_tokenOffered).safeTransfer(
-            address(trade_seller),
-            trade_amountOffered
-        );
+        //Transfer from the vault back to the owner.
+        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered);
     }
 
     function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
