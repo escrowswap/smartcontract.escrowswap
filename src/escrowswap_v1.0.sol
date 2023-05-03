@@ -41,6 +41,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         _;
     }
 
+    modifier verifiedId(uint256 _id) {
+        require(_id < idCounter, "ID is not in the range");
+        _;
+    }
+
     /// ------------ CONSTRUCTOR ------------
 
     constructor() {
@@ -58,7 +63,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     nonReentrant
     nonEmergencyCall
     {
-        require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
+        require(_amountOffered > 0, "Empty trade.");
+        if(_tokenOffered == address(0)) {
+            require(address(msg.sender).balance >= _amountOffered, "Insufficient balance of offered tokens.");
+        } else {
+            require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
+        }
 
         TradeOffer memory newOffer = TradeOffer({
             seller: msg.sender,
@@ -88,6 +98,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     {
         TradeOffer storage trade = tradeOffers[_id];
         require(trade.seller == msg.sender, "Unauthorized access to the trade.");
+        require(trade.amountOffered > 0, "Empty trade.");
 
         trade.amountRequested = _amountRequestedUpdated;
         trade.tokenRequested = _tokenRequestedUpdated;
@@ -101,6 +112,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 trade_amountOffered = tradeOffers[_id].amountOffered;
         address trade_tokenOffered = tradeOffers[_id].tokenOffered;
 
+        require(trade_amountOffered > 0, "Empty trade.");
         require(trade_seller == msg.sender, "Unauthorized access to the trade.");
 
         _deleteTradeOffer(_id);
@@ -122,8 +134,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
         require(trade.tokenRequested == _tokenRequested, "Trade data misaligned");
         require(trade.amountRequested == _amountRequested, "Trade data misaligned");
-        require(IERC20(trade.tokenRequested).balanceOf(msg.sender) >= trade.amountRequested,
-            "Insufficient balance");
+        require(trade.amountOffered > 0, "Empty trade.");
+        if(_tokenRequested == address(0)) {
+            require(address(msg.sender).balance >= _amountRequested, "Insufficient balance of offered tokens.");
+        } else {
+            require(IERC20(_tokenRequested).balanceOf(msg.sender) >= _amountRequested, "Insufficient balance of offered tokens.");
+        }
 
         _deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);

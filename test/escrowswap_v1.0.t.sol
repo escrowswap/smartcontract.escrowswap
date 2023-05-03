@@ -16,6 +16,14 @@ contract EscrowswapV1Test is Test {
     IERC20TEST public tokenOffered;
     IERC20TEST public tokenRequested;
 
+    struct TradeOffer {
+        address seller;
+        address tokenOffered;
+        address tokenRequested;
+        uint256 amountOffered;
+        uint256 amountRequested;
+    }
+
     function setUp() public {
         escrowswap = new EscrowswapV1();
 
@@ -44,10 +52,10 @@ contract EscrowswapV1Test is Test {
         assertEq(tokenRequested.balanceOf(sellerGood), 0, "Incorrect initial balance");
     }
 
-    /**
-    * Simple case to check if the function is working
-    */
-    function testCreateTradeOffer() public {
+    /// ------------ createTradeOffer ----------------------------------------------------------------------------------
+
+    // 1. Check whether the balance of the vault gets updated with ERC20
+    function testCreateTradeOfferBasic() public {
         vm.startPrank(sellerGood);
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "There is already a token.");
 
@@ -57,6 +65,121 @@ contract EscrowswapV1Test is Test {
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 1, "Issue with token amount.");
         vm.stopPrank();
     }
+
+    // 2. Check whether the balance of the vault gets updated with ETH
+    function testCreateTradeOfferWithEth() public {
+        assertEq(address(escrowswap).balance, 0, "There is already some eth.");
+
+        escrowswap.createTradeOffer{value: 1010000000000000000 wei}(address(0), uint256(1010000000000000000), address(tokenRequested), uint256(2));
+
+        assertEq(address(escrowswap).balance, 1010000000000000000, "Issue with amount of received eth.");
+    }
+
+    // 3. Check whether the storage gets filled with data.
+    function testCreateTradeOfferSolventStorage() public {
+        testCreateTradeOfferBasic();
+
+        assertEq(escrowswap.getTradeOffer(0).seller, address(sellerGood), "Different seller.");
+        assertEq(escrowswap.getTradeOffer(0).tokenOffered, address(tokenOffered), "Different token.");
+        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenRequested), "Different token.");
+        assertEq(escrowswap.getTradeOffer(0).amountOffered, 1, "Different amount.");
+        assertEq(escrowswap.getTradeOffer(0).amountRequested, 2, "Different amount.");
+    }
+
+    // 4. Expect revert if offered balance is 0 (meaning it was not set or the trade was deleted)
+    // TRIED FUZZ TESTING
+    function testCreateTradeOfferSolventStorage(uint8 x) public {
+        vm.startPrank(sellerGood);
+        for (uint i = 0; i < x; i++) {
+            tokenOffered.approve(address(escrowswap), 1);
+            escrowswap.createTradeOffer(address(tokenOffered), uint256(1), address(tokenRequested), uint256(2));
+            tokenOffered.mint(sellerGood, 1);
+        }
+        vm.stopPrank();
+        vm.expectRevert();
+        escrowswap.cancelTradeOffer(x);
+    }
+
+    /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
+
+    // 1. Check whether the requested token and amount are changed
+    function testAdjustTradeOfferBasic() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 10;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        uint256 amount_changed = 5;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+
+        escrowswap.adjustTradeOffer(0, address(tokenOffered), amount_changed);
+        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenOffered), "No change has been made to token requested.");
+        assertEq(escrowswap.getTradeOffer(0).amountRequested, amount_changed, "No change has been made to the amount of token requested.");
+        vm.stopPrank();
+    }
+
+    // 2. Expect revert if trade is being adjusted by NOT SELLER
+    function testAdjustTradeOfferUnauthorized() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        vm.stopPrank();
+
+        //transaction fails because of unauthorized access
+        vm.startPrank(sellerBad);
+        vm.expectRevert();
+        escrowswap.adjustTradeOffer(0, address(tokenOffered), 5);
+        vm.stopPrank();
+    }
+
+    /// ------------ cancelTradeOffer ----------------------------------------------------------------------------------
+
+    // 1. Check whether the requested trade is getting deleted
+    function testCancelTradeOffer() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 seller_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), amount_sell, "Contract has not received the token.");
+        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount - amount_sell, "Contract hasn't received the tokens FROM the seller.");
+
+        escrowswap.cancelTradeOffer(0);
+
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens have not been sent back.");
+        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been sent back TO THE RIGHTFUL SELLER.");
+
+        vm.stopPrank();
+    }
+
+    // 2. Expect revert if trade is being adjusted by NOT SELLER
+    function testCancelTradeOfferUnauthorized() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        vm.stopPrank();
+
+        //transaction fails because of unauthorized access
+        vm.startPrank(sellerBad);
+        vm.expectRevert();
+        escrowswap.cancelTradeOffer(0);
+        vm.stopPrank();
+    }
+
+    /// ------------ acceptTradeOffer ----------------------------------------------------------------------------------
 
     function testAcceptTradeOffer() public {
         uint256 amount_sell = 2;
@@ -80,87 +203,16 @@ contract EscrowswapV1Test is Test {
         vm.stopPrank();
     }
 
-    function testAdjustTradeOffer() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 10;
-        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+    /// ===================== TESTING FEE FUNCTIONALITY ======================================
 
-        uint256 amount_changed = 5;
-
-        vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
-
-        escrowswap.adjustTradeOffer(0, address(tokenOffered), amount_changed);
-        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenOffered), "No change has been made to token requested.");
-        assertEq(escrowswap.getTradeOffer(0).amountRequested, amount_changed, "No change has been made to the amount of token requested.");
-        vm.stopPrank();
-    }
-
-    function testAdjustTradeOfferUnauthorized() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 5;
-        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
-
-        vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
-        vm.stopPrank();
-
-        //transaction fails because of unauthorized access
-        vm.startPrank(sellerBad);
-        vm.expectRevert();
-        escrowswap.adjustTradeOffer(0, address(tokenOffered), 5);
-        vm.stopPrank();
-    }
-
-    function testCancelTradeOfferUnauthorized() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 5;
-        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
-
-        vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
-        vm.stopPrank();
-
-        //transaction fails because of unauthorized access
-        vm.startPrank(sellerBad);
-        vm.expectRevert();
-        escrowswap.cancelTradeOffer(0);
-        vm.stopPrank();
-    }
-
-    function testCancelTradeOffer() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 5;
-        uint256 seller_amount = tokenRequested.balanceOf(address(buyerGood));
-
-        vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
-
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), amount_sell, "Contract has not received the token.");
-        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount - amount_sell, "Contract hasn't received the tokens FROM the seller.");
-
-        escrowswap.cancelTradeOffer(0);
-
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens have not been sent back.");
-        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been sent back TO THE RIGHTFUL SELLER.");
-
-        vm.stopPrank();
-    }
-
-    //=====================TESTING FEE FUNCTIONALITY======================================
-
-    //GAS test
+    /// GAS test
     function testGetTradingPairFee() public  {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         uint256 result = escrowswap.getTradingPairFee(hash);
         assertEq(result, 0, "Non-default fee has been received");
     }
 
-    //GAS test
+    /// GAS test
     function testSetTradingPairFee() public {
         uint256 fee1 = 4500;
         uint256 fee2 = 6500;
@@ -174,7 +226,7 @@ contract EscrowswapV1Test is Test {
         assertEq(result, fee2, "Wrong fee has been received");
     }
 
-    //GAS test
+    /// GAS test
     function testDeleteTradingPairFee() public {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         escrowswap.setTradingPairFee(hash, 4500);
@@ -187,7 +239,7 @@ contract EscrowswapV1Test is Test {
         assertEq(result, 0, "Non-default fee has been received");
     }
 
-    //GAS test
+    /// GAS test
     function testSetBaseFee() public {
         escrowswap.setBaseFee(4500);
     }
