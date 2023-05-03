@@ -186,7 +186,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
         // FEE Payment transaction
         _handleEscrowTransfer(
-            msg.sender,
+            _sender,
             _amount * fee / 100000,
             _tokenReq,
             owner()
