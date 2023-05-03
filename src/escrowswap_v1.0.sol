@@ -170,12 +170,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emergencyWithdrawal = !emergencyWithdrawal;
     }
 
-    function setTradingPairFee(bytes32 hash, uint256 fee) external onlyOwner {
-        tradingPairFees[hash] = fee;
+    function setTradingPairFee(bytes32 _hash, uint256 _fee) external onlyOwner {
+        tradingPairFees[_hash] = _fee;
     }
 
-    function deleteTradingPairFee(bytes32 hash) external onlyOwner {
-        delete tradingPairFees[hash];
+    function deleteTradingPairFee(bytes32 _hash) external onlyOwner {
+        delete tradingPairFees[_hash];
     }
 
     function setBaseFee(uint256 _fee) external onlyOwner {
@@ -184,8 +184,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ VIEW FUNCTIONS ------------
 
-    function getTradingPairFee(bytes32 hash) external view returns (uint256)  {
-        return tradingPairFees[hash];
+    function getTradingPairFee(bytes32 _hash) external view returns (uint256)  {
+        return tradingPairFees[_hash];
     }
 
     function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
@@ -248,7 +248,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         delete tradeOffers[_id];
     }
 
-    function _getTradingPairHash(address token0, address token1) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked(token0, token1));
+    function _getTradingPairHash(address _token0, address _token1) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_token0, _token1));
     }
 }
