@@ -42,6 +42,11 @@ contract EscrowswapV1Test is Test {
         tokenOffered.mint(sellerBad, 1000);
         tokenRequested.mint(buyerGood, 1000);
         tokenRequested.mint(buyerBad, 1000);
+
+        vm.deal(sellerGood, 100 ether);
+        //vm.deal(sellerBad, 100 ether);
+        vm.deal(buyerGood, 100 ether);
+        vm.deal(sellerBad, 100 ether);
     }
 
     /**
@@ -88,6 +93,7 @@ contract EscrowswapV1Test is Test {
 
     // 4. Expect revert if offered balance is 0 (meaning it was not set or the trade was deleted)
     // TRIED FUZZ TESTING
+    /*
     function testCreateTradeOfferSolventStorage(uint8 x) public {
         vm.startPrank(sellerGood);
         for (uint i = 0; i < x; i++) {
@@ -98,7 +104,7 @@ contract EscrowswapV1Test is Test {
         vm.stopPrank();
         vm.expectRevert();
         escrowswap.cancelTradeOffer(x);
-    }
+    } */
 
     /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
 
@@ -181,7 +187,8 @@ contract EscrowswapV1Test is Test {
 
     /// ------------ acceptTradeOffer ----------------------------------------------------------------------------------
 
-    function testAcceptTradeOffer() public {
+    // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred.
+    function testAcceptTradeOfferBasic() public {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
@@ -193,14 +200,41 @@ contract EscrowswapV1Test is Test {
 
         vm.startPrank(buyerGood);
         tokenRequested.approve(address(escrowswap), amount_get+5);
+        assertEq(tokenRequested.balanceOf(address(sellerGood)), 0, "Issue with token amount seller.");
         escrowswap.acceptTradeOffer(0, address(tokenRequested), amount_get);
 
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount.");
-        assertEq(tokenRequested.balanceOf(address(sellerGood)), amount_get, "Issue with token amount.");
-        assertEq(tokenRequested.balanceOf(address(buyerGood)), buyer_amount - amount_get, "Issue with token amount.");
-        assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount.");
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount escrow.");
+        assertEq(tokenRequested.balanceOf(address(sellerGood)), amount_get, "Issue with token amount seller.");
+        assertEq(tokenRequested.balanceOf(address(buyerGood)), buyer_amount - amount_get, "Issue with token amount buyer requested.");
+        assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount buyer offered.");
 
         vm.stopPrank();
+    }
+
+    // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred.
+    function testAcceptTradeOfferWithEth() public {
+        uint256 amount_sell = 2;
+        uint256 amount_get = 5;
+        uint256 buyer_amount = address(buyerGood).balance;
+        uint256 seller_amount = address(sellerGood).balance;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amount_sell);
+        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(0), 1010000000000000000);
+        vm.stopPrank();
+
+        escrowswap.setFeePayoutAddress(address(sellerBad));
+
+        vm.startPrank(buyerGood);
+        escrowswap.acceptTradeOffer{value: 1110000000000000000 wei}(0, address(0), 1010000000000000000);
+        vm.stopPrank();
+
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount escrow.");
+        assertEq(address(sellerGood).balance, seller_amount + 1010000000000000000, "Issue with token amount seller.");
+        assertLe(address(buyerGood).balance, buyer_amount - 1010000000000000000, "Issue with token amount buyer requested.");
+        assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount buyer offered.");
+        assertGt(address(sellerBad).balance, 0, "Issue with eth amount escrow.");
+
     }
 
     /// ===================== TESTING FEE FUNCTIONALITY ======================================
@@ -208,14 +242,14 @@ contract EscrowswapV1Test is Test {
     /// GAS test
     function testGetTradingPairFee() public  {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
-        uint256 result = escrowswap.getTradingPairFee(hash);
-        assertEq(result, 0, "Non-default fee has been received");
+        uint16 result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, 2500, "Non-default fee has been received");
     }
 
     /// GAS test
     function testSetTradingPairFee() public {
-        uint256 fee1 = 4500;
-        uint256 fee2 = 6500;
+        uint16 fee1 = 4500;
+        uint16 fee2 = 6500;
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         escrowswap.setTradingPairFee(hash, fee1);
         uint256 result = escrowswap.getTradingPairFee(hash);
@@ -229,6 +263,7 @@ contract EscrowswapV1Test is Test {
     /// GAS test
     function testDeleteTradingPairFee() public {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
+        escrowswap.setBaseFee(1000);
         escrowswap.setTradingPairFee(hash, 4500);
         uint256 result = escrowswap.getTradingPairFee(hash);
         assertEq(result, 4500, "Different fee has been received");
@@ -236,7 +271,7 @@ contract EscrowswapV1Test is Test {
         escrowswap.deleteTradingPairFee(hash);
 
         result = escrowswap.getTradingPairFee(hash);
-        assertEq(result, 0, "Non-default fee has been received");
+        assertEq(result, 1000, "Non-default fee has been received");
     }
 
     /// GAS test

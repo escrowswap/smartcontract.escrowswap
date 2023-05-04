@@ -9,9 +9,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 private idCounter;
-    uint256 private baseFee;
-    bool private emergencyWithdrawal;
+    uint16 private baseFee;
+    uint16 immutable private GAS_LIMIT;
+    address private feePayoutAddress;
     IWETH immutable weth;
+    bool private emergencyWithdrawal;
 
     struct TradeOffer {
         address seller;
@@ -24,7 +26,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     /// ------------ STORAGE ------------
 
     mapping(uint256 => TradeOffer) private tradeOffers;
-    mapping(bytes32 => uint256) private tradingPairFees;
+    mapping(bytes32 => uint16) private tradingPairFees;
 
     /// ------------ EVENTS ------------
 
@@ -41,11 +43,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier verifiedId(uint256 _id) {
-        require(_id < idCounter, "ID is not in the range");
-        _;
-    }
-
     /// ------------ CONSTRUCTOR ------------
 
     constructor() {
@@ -53,6 +50,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         baseFee = 2500; // 2500 / 100000 = 2.5%
         emergencyWithdrawal = false;
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        feePayoutAddress = owner();
+        GAS_LIMIT = 50000;
     }
 
     /// ------------ MAKER FUNCTIONS ------------
@@ -84,7 +83,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferCreated(idCounter, newOffer.seller, newOffer.tokenOffered,
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
 
-        _handleEscrowTransfer(
+        _handleIncomingTransfer(
             msg.sender,
             _amountOffered,
             _tokenOffered,
@@ -119,7 +118,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferCancelled(_id);
 
         //Transfer from the vault back to the owner.
-        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered);
+        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered, GAS_LIMIT);
     }
 
     /// ------------ TAKER FUNCTIONS ------------
@@ -145,11 +144,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferAccepted(_id, msg.sender);
 
         //Transfer from buyer to seller.
-        _handleEscrowTransfer(
+        _handleRelayTransfer(
             msg.sender,
             trade.amountRequested,
             trade.tokenRequested,
-            address(trade.seller)
+            address(trade.seller),
+            GAS_LIMIT
         );
 
         //Fee Payment calculation and exec.
@@ -161,7 +161,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         );
 
         //Transfer from the vault to buyer.
-        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
+        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered, GAS_LIMIT);
     }
 
     /// ------------ MASTER FUNCTIONS ------------
@@ -170,7 +170,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emergencyWithdrawal = !emergencyWithdrawal;
     }
 
-    function setTradingPairFee(bytes32 _hash, uint256 _fee) external onlyOwner {
+    function setTradingPairFee(bytes32 _hash, uint16 _fee) external onlyOwner {
         tradingPairFees[_hash] = _fee;
     }
 
@@ -178,14 +178,20 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         delete tradingPairFees[_hash];
     }
 
-    function setBaseFee(uint256 _fee) external onlyOwner {
+    function setBaseFee(uint16 _fee) external onlyOwner {
         baseFee = _fee;
+    }
+
+    function setFeePayoutAddress(address _addr) external onlyOwner {
+        feePayoutAddress = _addr;
     }
 
     /// ------------ VIEW FUNCTIONS ------------
 
-    function getTradingPairFee(bytes32 _hash) external view returns (uint256)  {
-        return tradingPairFees[_hash];
+    function getTradingPairFee(bytes32 _hash) external view returns (uint16)  {
+        uint16 fee = tradingPairFees[_hash];
+        if(fee == 0) return baseFee;
+        return fee;
     }
 
     function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
@@ -201,15 +207,16 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
 
         // FEE Payment transaction
-        _handleEscrowTransfer(
+        _handleRelayTransfer(
             _sender,
             _amount * fee / 100000,
             _tokenReq,
-            owner()
+            feePayoutAddress,
+            GAS_LIMIT
         );
     }
 
-    function _handleEscrowTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
+    function _handleIncomingTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
             require(msg.value >= _amount, "_handleIncomingTransfer msg value less than expected amount");
         } else {
@@ -224,7 +231,23 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) private {
+    function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest, uint256 _gasLimit) private {
+        if (_token == address(0)) {
+            require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
+
+            uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
+            (bool success, ) = _dest.call{value: _amount, gas: gas}("");
+            // If the ETH transfer fails, wrap the ETH and try send it as WETH.
+            if (!success) {
+                weth.deposit{value: _amount}();
+                IERC20(address(weth)).safeTransfer(_dest, _amount);
+            }
+        } else {
+            IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
+        }
+    }
+
+    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token, uint256 _gasLimit) private {
         if (_amount == 0 || _dest == address(0)) {
             return;
         }
@@ -233,7 +256,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         if (_token == address(0)) {
             require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
 
-            (bool success, ) = _dest.call{value: _amount}("");
+            uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
+            (bool success, ) = _dest.call{value: _amount, gas: gas}("");
             // If the ETH transfer fails, wrap the ETH and try send it as WETH.
             if (!success) {
                 weth.deposit{value: _amount}();
