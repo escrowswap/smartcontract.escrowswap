@@ -49,9 +49,6 @@ contract EscrowswapV1Test is Test {
         vm.deal(sellerBad, 100 ether);
     }
 
-    /**
-    * Testing setup
-    */
     function testTokenInteraction() public {
         assertEq(tokenOffered.balanceOf(sellerGood), 1000, "Incorrect initial balance");
         assertEq(tokenRequested.balanceOf(sellerGood), 0, "Incorrect initial balance");

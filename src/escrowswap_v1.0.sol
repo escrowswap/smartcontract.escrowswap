@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+//import "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IWETH} from "./resources/IWETH.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
@@ -10,6 +11,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     uint256 private idCounter;
     uint16 private baseFee;
+    //uint16 immutable baseFeeDenominator;
     uint16 immutable private GAS_LIMIT;
     address private feePayoutAddress;
     IWETH immutable weth;
@@ -50,8 +52,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         baseFee = 2500; // 2500 / 100000 = 2.5%
         emergencyWithdrawal = false;
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        feePayoutAddress = owner();
         GAS_LIMIT = 50000;
+        feePayoutAddress = owner();
     }
 
     /// ------------ MAKER FUNCTIONS ------------
