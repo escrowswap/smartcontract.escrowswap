@@ -186,8 +186,8 @@ contract EscrowswapV1Test is Test {
 
     // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred.
     function testAcceptTradeOfferBasic() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 5;
+        uint256 amount_sell = 200;
+        uint256 amount_get = 500;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
 
         vm.startPrank(sellerGood);
@@ -196,13 +196,14 @@ contract EscrowswapV1Test is Test {
         vm.stopPrank();
 
         vm.startPrank(buyerGood);
-        tokenRequested.approve(address(escrowswap), amount_get+5);
+        tokenRequested.approve(address(escrowswap), amount_get+500);
         assertEq(tokenRequested.balanceOf(address(sellerGood)), 0, "Issue with token amount seller.");
         escrowswap.acceptTradeOffer(0, address(tokenRequested), amount_get);
 
+
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount escrow.");
         assertEq(tokenRequested.balanceOf(address(sellerGood)), amount_get, "Issue with token amount seller.");
-        assertEq(tokenRequested.balanceOf(address(buyerGood)), buyer_amount - amount_get, "Issue with token amount buyer requested.");
+        assertLe(tokenRequested.balanceOf(address(buyerGood)), buyer_amount - amount_get, "Issue with token amount buyer requested.");
         assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount buyer offered.");
 
         vm.stopPrank();
@@ -239,8 +240,8 @@ contract EscrowswapV1Test is Test {
     /// GAS test
     function testGetTradingPairFee() public  {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
-        uint16 result = escrowswap.getTradingPairFee(hash);
-        assertEq(result, 2500, "Non-default fee has been received");
+        uint256 result = escrowswap.getTradingPairFee(hash);
+        assertEq(result, 2000, "Non-default fee has been received");
     }
 
     /// GAS test

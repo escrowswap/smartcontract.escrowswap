@@ -9,13 +9,13 @@ import {IWETH} from "./resources/IWETH.sol";
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 private idCounter;
-    uint16 private baseFee;
-    //uint16 immutable baseFeeDenominator;
     uint16 immutable private GAS_LIMIT;
-    address private feePayoutAddress;
-    IWETH immutable weth;
     bool private emergencyWithdrawal;
+    address private feePayoutAddress;
+    IWETH immutable private weth;
+    uint256 immutable baseFeeDenominator;
+    uint256 private idCounter;
+    uint256 private baseFee;
 
     struct TradeOffer {
         address seller;
@@ -49,11 +49,14 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     constructor() {
         idCounter = 0;
-        baseFee = 2500; // 2500 / 100000 = 2.5%
-        emergencyWithdrawal = false;
-        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        GAS_LIMIT = 50000;
+
+        baseFee = 2_000; // 2000 / 100000 = 2.0%
+        baseFeeDenominator = 100_000;
         feePayoutAddress = owner();
+
+        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        GAS_LIMIT = 50_000;
+        emergencyWithdrawal = false;
     }
 
     /// ------------ MAKER FUNCTIONS ------------
@@ -65,11 +68,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     nonEmergencyCall
     {
         require(_amountOffered > 0, "Empty trade.");
-        if(_tokenOffered == address(0)) {
-            require(address(msg.sender).balance >= _amountOffered, "Insufficient balance of offered tokens.");
-        } else {
-            require(IERC20(_tokenOffered).balanceOf(msg.sender) >= _amountOffered, "Insufficient balance of offered tokens.");
-        }
+        require(_amountRequested > 0, "Empty trade.");
 
         TradeOffer memory newOffer = TradeOffer({
             seller: msg.sender,
@@ -136,11 +135,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         require(trade.tokenRequested == _tokenRequested, "Trade data misaligned");
         require(trade.amountRequested == _amountRequested, "Trade data misaligned");
         require(trade.amountOffered > 0, "Empty trade.");
-        if(_tokenRequested == address(0)) {
-            require(address(msg.sender).balance >= _amountRequested, "Insufficient balance of offered tokens.");
-        } else {
-            require(IERC20(_tokenRequested).balanceOf(msg.sender) >= _amountRequested, "Insufficient balance of offered tokens.");
-        }
 
         _deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
@@ -180,7 +174,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         delete tradingPairFees[_hash];
     }
 
-    function setBaseFee(uint16 _fee) external onlyOwner {
+    function setBaseFee(uint256 _fee) external onlyOwner {
         baseFee = _fee;
     }
 
@@ -190,8 +184,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ VIEW FUNCTIONS ------------
 
-    function getTradingPairFee(bytes32 _hash) external view returns (uint16)  {
-        uint16 fee = tradingPairFees[_hash];
+    function getTradingPairFee(bytes32 _hash) public view returns (uint256)  {
+        uint256 fee = tradingPairFees[_hash];
         if(fee == 0) return baseFee;
         return fee;
     }
@@ -203,15 +197,19 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     /// ------------ HELPER FUNCTIONS ------------
 
     function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) private {
-        uint256 fee = tradingPairFees[_getTradingPairHash(_tokenReq, _tokenOff)];
-        if (fee == 0) {
-            fee = baseFee;
+
+        // Sometimes decimal number of a token is too low or it's not possible to calculate
+        // the fee without rounding it to ZERO.
+        // In that case we request 1 unit of the token to be sent as a fee.
+        uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / baseFeeDenominator;
+        if (fee != 0) {
+            fee = 1;
         }
 
         // FEE Payment transaction
         _handleRelayTransfer(
             _sender,
-            _amount * fee / 100000,
+            fee,
             _tokenReq,
             feePayoutAddress,
             GAS_LIMIT
