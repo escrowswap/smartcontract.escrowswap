@@ -3,7 +3,6 @@ pragma solidity ^0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-//import "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IWETH} from "./resources/IWETH.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
