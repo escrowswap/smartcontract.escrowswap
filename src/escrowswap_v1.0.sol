@@ -78,10 +78,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         });
 
         tradeOffers[idCounter] = newOffer;
-        ++idCounter;
 
         emit TradeOfferCreated(idCounter, newOffer.seller, newOffer.tokenOffered,
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
+
+        ++idCounter;
 
         _handleIncomingTransfer(
             msg.sender,
