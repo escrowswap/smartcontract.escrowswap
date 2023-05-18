@@ -27,7 +27,7 @@ contract EscrowswapV1Test is Test {
     function setUp() public {
         escrowswap = new EscrowswapV1();
 
-        //create alias for signers
+        //create aliases for signers
         sellerGood = vm.addr(1);
         sellerBad = vm.addr(2);
         buyerGood = vm.addr(3);
@@ -55,16 +55,25 @@ contract EscrowswapV1Test is Test {
     }
 
     /// ------------ createTradeOffer ----------------------------------------------------------------------------------
+    // (address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested)
+    //
+    // event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
+    // address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
 
     // 1. Check whether the balance of the vault gets updated with ERC20
-    function testCreateTradeOfferBasic() public {
+    function testCreateTradeOfferBasic(uint128 amountToSell, uint128 amountToReceive) public {
+        uint256 buyerSellingBalance = tokenRequested.balanceOf(address(buyerGood));
+        tokenOffered.mint(sellerGood, amountToSell);
+        vm.assume(amountToSell > 0);
+        vm.assume(amountToReceive > 0);
+
         vm.startPrank(sellerGood);
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "There is already a token.");
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "EscrowSwap is already in possession of the mentioned token.");
 
-        tokenOffered.approve(address(escrowswap), 1);
-        escrowswap.createTradeOffer(address(tokenOffered), uint256(1), address(tokenRequested), uint256(2));
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
 
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 1, "Issue with token amount.");
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), amountToSell, "EscrowSwap has not received the right amount of tokens.");
         vm.stopPrank();
     }
 
@@ -77,15 +86,18 @@ contract EscrowswapV1Test is Test {
         assertEq(address(escrowswap).balance, 1010000000000000000, "Issue with amount of received eth.");
     }
 
-    // 3. Check whether the storage gets filled with data.
+    // 3. Check whether the storage gets filled with the right data.
     function testCreateTradeOfferSolventStorage() public {
-        testCreateTradeOfferBasic();
+        uint128 amountToSellMock = 99;
+        uint128 amountToReceiveMock = 100;
+
+        testCreateTradeOfferBasic(amountToSellMock, amountToReceiveMock);
 
         assertEq(escrowswap.getTradeOffer(0).seller, address(sellerGood), "Different seller.");
         assertEq(escrowswap.getTradeOffer(0).tokenOffered, address(tokenOffered), "Different token.");
         assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenRequested), "Different token.");
-        assertEq(escrowswap.getTradeOffer(0).amountOffered, 1, "Different amount.");
-        assertEq(escrowswap.getTradeOffer(0).amountRequested, 2, "Different amount.");
+        assertEq(escrowswap.getTradeOffer(0).amountOffered, amountToSellMock, "Different amount.");
+        assertEq(escrowswap.getTradeOffer(0).amountRequested, amountToReceiveMock, "Different amount.");
     }
 
     // 4. Expect revert if offered balance is 0 (meaning it was not set or the trade was deleted)
