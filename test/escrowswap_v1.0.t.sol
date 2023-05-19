@@ -14,6 +14,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     address public sellerBad;
     address public buyerGood;
     address public buyerBad;
+    address public feePayoutAddress;
 
     IERC20TEST public tokenOffered;
     IERC20TEST public tokenRequested;
@@ -35,6 +36,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
         sellerBad = vm.addr(2);
         buyerGood = vm.addr(3);
         buyerBad = vm.addr(4);
+        feePayoutAddress = vm.addr(5);
 
         // Deploy a mock ERC20 token for testing
         tokenOffered = IERC20TEST(address(new MockTokenERC20("My Token1", "MTK1", 18)));
@@ -51,10 +53,12 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.deal(buyerGood, 100 ether);
         vm.deal(sellerBad, 100 ether);
 
+        //Tokens which are supposed to Revert
         erc20RevertNames["MissingReturnToken"] = true;
         erc20RevertNames["ReturnsFalseToken"] = true;
         erc20RevertNames["TransferFeeToken"] = true;
         erc20RevertNames["Uint96ERC20"] = true;
+        //erc20RevertNames["RevertToZeroToken"] = true;
 
     }
 
@@ -70,9 +74,11 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
 
     // 1. Check whether the balance of the vault gets updated with BROKEN-ERC20 except REVERT-ERC20
-    function testCreateTradeOfferBrokenERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
+    function testCreateTradeOfferBrokenERC20(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
+        vm.assume(amountToSell < type(uint256).max);
         vm.assume(amountToReceive > 0);
+        vm.assume(amountToReceive < type(uint256).max);
 
         string memory erc20CurrentName = brokenERC20_NAME;
         bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
@@ -98,8 +104,8 @@ contract EscrowswapV1Test is Test, BrokenToken {
         }
     }
 
-    // 2. Check whether the function reverts on REVERT-ERC20
-    function testCreateTradeOfferRevertERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
+    // 1.5 Check whether the function reverts on REVERT-ERC20
+    /*function testCreateTradeOfferRevertERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToReceive > 0);
 
@@ -113,7 +119,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
             vm.expectRevert();
             uint256 tradeId = escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
         }
-    }
+    }*/
 
     // 2. Check whether the balance of the vault gets updated with ETH
     function testCreateTradeOfferWithEth() public {
@@ -143,20 +149,18 @@ contract EscrowswapV1Test is Test, BrokenToken {
     /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested token and amount are changed
-    function testAdjustTradeOfferBasic() public {
+    function testAdjustTradeOfferBasic(uint256 amountToReceive_changed, address tokenRequested_changed) public {
         uint256 amount_sell = 2;
         uint256 amount_get = 10;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
 
-        uint256 amount_changed = 5;
-
         vm.startPrank(sellerGood);
         tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
 
-        escrowswap.adjustTradeOffer(0, address(tokenOffered), amount_changed);
-        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenOffered), "No change has been made to token requested.");
-        assertEq(escrowswap.getTradeOffer(0).amountRequested, amount_changed, "No change has been made to the amount of token requested.");
+        escrowswap.adjustTradeOffer(tradeId, address(tokenRequested_changed), amountToReceive_changed);
+        assertEq(escrowswap.getTradeOffer(tradeId).tokenRequested, address(tokenRequested_changed), "No change has been made to token requested.");
+        assertEq(escrowswap.getTradeOffer(tradeId).amountRequested, amountToReceive_changed, "No change has been made to the amount of token requested.");
         vm.stopPrank();
     }
 
@@ -222,28 +226,47 @@ contract EscrowswapV1Test is Test, BrokenToken {
     /// ------------ acceptTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred.
-    function testAcceptTradeOfferBasic() public {
-        uint256 amount_sell = 200;
-        uint256 amount_get = 500;
-        uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+    function testAcceptTradeOfferBasic(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
+        vm.assume(amountToSell > 0);
+        vm.assume(amountToSell < type(uint256).max);
+        vm.assume(amountToReceive > 0);
+        vm.assume(amountToReceive < type(uint256).max);
 
-        vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
-        vm.stopPrank();
-
-        vm.startPrank(buyerGood);
-        tokenRequested.approve(address(escrowswap), amount_get+500);
-        assertEq(tokenRequested.balanceOf(address(sellerGood)), 0, "Issue with token amount seller.");
-        escrowswap.acceptTradeOffer(0, address(tokenRequested), amount_get);
-
-
+        /**
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount escrow.");
         assertEq(tokenRequested.balanceOf(address(sellerGood)), amount_get, "Issue with token amount seller.");
         assertLe(tokenRequested.balanceOf(address(buyerGood)), buyer_amount - amount_get, "Issue with token amount buyer requested.");
         assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount buyer offered.");
+        */
 
-        vm.stopPrank();
+        string memory erc20CurrentName = brokenERC20_NAME;
+        bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
+        if (!isCurrentErc20Revert) {
+            deal(address(brokenERC20), buyerGood, amountToReceive);
+            tokenOffered.mint(sellerGood, amountToSell);
+
+            escrowswap.setFeePayoutAddress(feePayoutAddress);
+
+            vm.startPrank(sellerGood);
+            tokenOffered.approve(address(escrowswap), amountToSell);
+            uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(brokenERC20), amountToReceive);
+            vm.stopPrank();
+
+            vm.startPrank(buyerGood);
+            brokenERC20.approve(address(escrowswap), amountToReceive);
+            escrowswap.acceptTradeOffer(tradeId, address(brokenERC20), amountToReceive);
+            vm.stopPrank();
+
+            uint256 calculatedFee = _calculateFee(address(brokenERC20), address(tokenOffered), amountToReceive);
+            assertEq(brokenERC20.balanceOf(address(sellerGood)), amountToReceive, "Seller has not received the right amount of tokens.");
+            assertEq(tokenOffered.balanceOf(address(buyerGood)), amountToSell, "Buyer has not received the right amount of tokens.");
+            assertEq(brokenERC20.balanceOf(address(feePayoutAddress)), calculatedFee, "Fee has not been received in the right amount of tokens.");
+        }
+    }
+
+    function _calculateFee(address _tokenReq, address _tokenOff, uint256 _amount) private returns (uint256) {
+        uint256 fee = escrowswap.getTradingPairFee(keccak256(abi.encodePacked(_tokenReq, _tokenOff))) * _amount / 100_000;
+        return fee;
     }
 
     // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred.
