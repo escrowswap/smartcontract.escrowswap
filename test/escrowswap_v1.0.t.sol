@@ -6,7 +6,9 @@ import "../src/escrowswap_v1.0.sol";
 import "../src/resources/IERC20TEST.sol";
 import "test/resources/MockTokenERC20.sol";
 
-contract EscrowswapV1Test is Test {
+import {BrokenToken} from "brokentoken/BrokenToken.sol";
+
+contract EscrowswapV1Test is Test, BrokenToken {
     EscrowswapV1 public escrowswap;
     address public sellerGood;
     address public sellerBad;
@@ -16,6 +18,8 @@ contract EscrowswapV1Test is Test {
     IERC20TEST public tokenOffered;
     IERC20TEST public tokenRequested;
 
+    mapping(string => bool) public erc20RevertNames;
+
     struct TradeOffer {
         address seller;
         address tokenOffered;
@@ -23,7 +27,6 @@ contract EscrowswapV1Test is Test {
         uint256 amountOffered;
         uint256 amountRequested;
     }
-
     function setUp() public {
         escrowswap = new EscrowswapV1();
 
@@ -47,6 +50,12 @@ contract EscrowswapV1Test is Test {
         //vm.deal(sellerBad, 100 ether);
         vm.deal(buyerGood, 100 ether);
         vm.deal(sellerBad, 100 ether);
+
+        erc20RevertNames["MissingReturnToken"] = true;
+        erc20RevertNames["ReturnsFalseToken"] = true;
+        erc20RevertNames["TransferFeeToken"] = true;
+        erc20RevertNames["Uint96ERC20"] = true;
+
     }
 
     function testTokenInteraction() public {
@@ -60,21 +69,50 @@ contract EscrowswapV1Test is Test {
     // event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
     // address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
 
-    // 1. Check whether the balance of the vault gets updated with ERC20
-    function testCreateTradeOfferBasic(uint128 amountToSell, uint128 amountToReceive) public {
-        uint256 buyerSellingBalance = tokenRequested.balanceOf(address(buyerGood));
-        tokenOffered.mint(sellerGood, amountToSell);
+    // 1. Check whether the balance of the vault gets updated with BROKEN-ERC20 except REVERT-ERC20
+    function testCreateTradeOfferBrokenERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToReceive > 0);
 
-        vm.startPrank(sellerGood);
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "EscrowSwap is already in possession of the mentioned token.");
+        string memory erc20CurrentName = brokenERC20_NAME;
+        bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
+        if (!isCurrentErc20Revert) {
+            deal(address(brokenERC20), sellerGood, amountToSell);
 
-        tokenOffered.approve(address(escrowswap), amountToSell);
-        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+            assertEq(brokenERC20.balanceOf(address(escrowswap)), 0, "EscrowSwap is already in possession of the mentioned token.");
 
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), amountToSell, "EscrowSwap has not received the right amount of tokens.");
-        vm.stopPrank();
+            vm.startPrank(sellerGood);
+            brokenERC20.approve(address(escrowswap), amountToSell);
+
+            uint256 tradeId = escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+
+            assertEq(brokenERC20.balanceOf(address(escrowswap)), amountToSell, "EscrowSwap has not received the right amount of tokens.");
+            vm.stopPrank();
+
+            //checking if everything got saved in the storage correctly
+            assertEq(escrowswap.getTradeOffer(tradeId).seller, address(sellerGood), "Different seller.");
+            assertEq(escrowswap.getTradeOffer(tradeId).tokenOffered, address(brokenERC20), "Different token.");
+            assertEq(escrowswap.getTradeOffer(tradeId).tokenRequested, address(tokenRequested), "Different token.");
+            assertEq(escrowswap.getTradeOffer(tradeId).amountOffered, amountToSell, "Different amount.");
+            assertEq(escrowswap.getTradeOffer(tradeId).amountRequested, amountToReceive, "Different amount.");
+        }
+    }
+
+    // 2. Check whether the function reverts on REVERT-ERC20
+    function testCreateTradeOfferRevertERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
+        vm.assume(amountToSell > 0);
+        vm.assume(amountToReceive > 0);
+
+        string memory erc20CurrentName = brokenERC20_NAME;
+        bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
+        if (isCurrentErc20Revert) {
+            deal(address(brokenERC20), sellerGood, amountToSell);
+
+            vm.startPrank(sellerGood);
+            brokenERC20.approve(address(escrowswap), amountToSell);
+            vm.expectRevert();
+            uint256 tradeId = escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+        }
     }
 
     // 2. Check whether the balance of the vault gets updated with ETH
@@ -86,19 +124,6 @@ contract EscrowswapV1Test is Test {
         assertEq(address(escrowswap).balance, 1010000000000000000, "Issue with amount of received eth.");
     }
 
-    // 3. Check whether the storage gets filled with the right data.
-    function testCreateTradeOfferSolventStorage() public {
-        uint128 amountToSellMock = 99;
-        uint128 amountToReceiveMock = 100;
-
-        testCreateTradeOfferBasic(amountToSellMock, amountToReceiveMock);
-
-        assertEq(escrowswap.getTradeOffer(0).seller, address(sellerGood), "Different seller.");
-        assertEq(escrowswap.getTradeOffer(0).tokenOffered, address(tokenOffered), "Different token.");
-        assertEq(escrowswap.getTradeOffer(0).tokenRequested, address(tokenRequested), "Different token.");
-        assertEq(escrowswap.getTradeOffer(0).amountOffered, amountToSellMock, "Different amount.");
-        assertEq(escrowswap.getTradeOffer(0).amountRequested, amountToReceiveMock, "Different amount.");
-    }
 
     // 4. Expect revert if offered balance is 0 (meaning it was not set or the trade was deleted)
     // TRIED FUZZ TESTING

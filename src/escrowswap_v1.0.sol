@@ -65,10 +65,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     external
     nonReentrant
     nonEmergencyCall
+    returns (uint256 tradeId)
     {
         require(_amountOffered > 0, "Empty trade.");
         require(_amountRequested > 0, "Empty trade.");
 
+        tradeId = idCounter;
         TradeOffer memory newOffer = TradeOffer({
             seller: msg.sender,
             tokenOffered: _tokenOffered,
@@ -79,10 +81,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
         tradeOffers[idCounter] = newOffer;
 
-        emit TradeOfferCreated(idCounter, newOffer.seller, newOffer.tokenOffered,
-            newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
-
         ++idCounter;
+
+        emit TradeOfferCreated(tradeId, newOffer.seller, newOffer.tokenOffered,
+            newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
 
         _handleIncomingTransfer(
             msg.sender,
