@@ -4,6 +4,7 @@ import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IWETH} from "./resources/IWETH.sol";
+import "forge-std/console.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -204,10 +205,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         // the fee without rounding it to ZERO.
         // In that case we request 1 unit of the token to be sent as a fee.
         uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / baseFeeDenominator;
-        if (fee != 0) {
+        if (fee == 0) {
             fee = 1;
         }
 
+        console.log("Executing fee transfer");
         // FEE Payment transaction
         _handleRelayTransfer(
             _sender,
