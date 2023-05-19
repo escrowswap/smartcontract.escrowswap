@@ -10,10 +10,11 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint16 immutable private GAS_LIMIT;
+    uint256 immutable private TOKEN_AMOUNT_LIMIT;
+    IWETH immutable private weth;
     bool private emergencyWithdrawal;
     address private feePayoutAddress;
-    IWETH immutable private weth;
-    uint256 immutable baseFeeDenominator;
+    uint256 immutable private baseFeeDenominator;
     uint256 private idCounter;
     uint256 private baseFee;
 
@@ -56,6 +57,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         GAS_LIMIT = 50_000;
+        TOKEN_AMOUNT_LIMIT = 23158e69;
         emergencyWithdrawal = false;
     }
 
@@ -70,6 +72,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     {
         require(_amountOffered > 0, "Empty trade.");
         require(_amountRequested > 0, "Empty trade.");
+        require(_amountRequested < TOKEN_AMOUNT_LIMIT, "Value cannot be processed due to potential overflow.");
 
         tradeId = idCounter;
         TradeOffer memory newOffer = TradeOffer({
@@ -99,6 +102,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     external
     nonEmergencyCall
     {
+        require(_amountRequestedUpdated < TOKEN_AMOUNT_LIMIT, "Value cannot be processed due to potential overflow.");
+
         TradeOffer storage trade = tradeOffers[_id];
         require(trade.seller == msg.sender, "Unauthorized access to the trade.");
         require(trade.amountOffered > 0, "Empty trade.");
