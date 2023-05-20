@@ -231,7 +231,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     /// ------------ acceptTradeOffer ----------------------------------------------------------------------------------
 
-    // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred.
+    // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred to all the parties.
     function testAcceptTradeOfferBasic(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToSell < TOKEN_AMOUNT_LIMIT);
@@ -243,33 +243,29 @@ contract EscrowswapV1Test is Test, BrokenToken {
         if (!isCurrentErc20Revert) {
             uint256 calculatedFee = _calculateFee(address(brokenERC20), address(tokenOffered), amountToReceive);
             uint256 balance_buyerGood = tokenOffered.balanceOf(address(buyerGood));
-            deal(address(brokenERC20), buyerGood, amountToReceive + calculatedFee + 100);
+            deal(address(brokenERC20), buyerGood, amountToReceive + calculatedFee);
             tokenOffered.mint(sellerGood, amountToSell);
 
+            // set the address to receive the fee, for testing
             escrowswap.setFeePayoutAddress(feePayoutAddress);
 
+            // create an offer
             vm.startPrank(sellerGood);
             tokenOffered.approve(address(escrowswap), amountToSell);
             uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(brokenERC20), amountToReceive);
             vm.stopPrank();
 
+            // accept the offer
             vm.startPrank(buyerGood);
-            brokenERC20.approve(address(escrowswap), amountToReceive + calculatedFee + 100);
+            brokenERC20.approve(address(escrowswap), amountToReceive + calculatedFee);
             escrowswap.acceptTradeOffer(tradeId, address(brokenERC20), amountToReceive);
             vm.stopPrank();
 
+            // check whether tokens got transferred
             assertEq(brokenERC20.balanceOf(address(sellerGood)), amountToReceive, "Seller has not received the right amount of tokens.");
             assertEq(tokenOffered.balanceOf(address(buyerGood)), amountToSell + balance_buyerGood, "Buyer has not received the right amount of tokens.");
             assertEq(brokenERC20.balanceOf(address(feePayoutAddress)), calculatedFee, "Fee has not been received in the right amount of tokens.");
         }
-    }
-
-    function _calculateFee(address _tokenReq, address _tokenOff, uint256 _amount) private returns (uint256) {
-        uint256 fee = escrowswap.getTradingPairFee(keccak256(abi.encodePacked(_tokenReq, _tokenOff))) * _amount / 100_000;
-        if (fee == 0) {
-            fee = 1;
-        }
-        return fee;
     }
 
     // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred.
@@ -297,6 +293,16 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertGt(address(sellerBad).balance, 0, "Issue with eth amount escrow.");
 
     }
+
+    // Mimicking how fee is calculated in the actual contract
+    function _calculateFee(address _tokenReq, address _tokenOff, uint256 _amount) private returns (uint256) {
+        uint256 fee = escrowswap.getTradingPairFee(keccak256(abi.encodePacked(_tokenReq, _tokenOff))) * _amount / 100_000;
+        if (fee == 0) {
+            fee = 1;
+        }
+        return fee;
+    }
+
 
     /// ===================== TESTING FEE FUNCTIONALITY ======================================
 
