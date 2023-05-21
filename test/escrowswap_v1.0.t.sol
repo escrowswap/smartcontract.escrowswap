@@ -42,7 +42,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         TOKEN_AMOUNT_LIMIT = 23158e69;
 
-        // Deploy a mock ERC20 token for testing
+        // Deploy mock ERC20 tokens for testing
         tokenOffered = IERC20TEST(address(new MockTokenERC20("My Token1", "MTK1", 18)));
         tokenRequested = IERC20TEST(address(new MockTokenERC20("My Token2", "MTK2", 18)));
 
@@ -63,11 +63,6 @@ contract EscrowswapV1Test is Test, BrokenToken {
         erc20RevertNames["TransferFeeToken"] = true; // due to locked funds issue aren't supported
         erc20RevertNames["Uint96ERC20"] = true;
 
-    }
-
-    function testTokenInteraction() public {
-        assertEq(tokenOffered.balanceOf(sellerGood), 1000, "Incorrect initial balance");
-        assertEq(tokenRequested.balanceOf(sellerGood), 0, "Incorrect initial balance");
     }
 
     /// ------------ createTradeOffer ----------------------------------------------------------------------------------
@@ -125,29 +120,18 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }*/
 
     // 2. Check whether the balance of the vault gets updated with ETH
-    function testCreateTradeOfferWithEth() public {
-        assertEq(address(escrowswap).balance, 0, "There is already some eth.");
+    function testCreateTradeOfferWithEth(uint256 amountEthToSell) public {
+        vm.assume(amountEthToSell > 0);
+        vm.deal(sellerGood, amountEthToSell);
 
-        escrowswap.createTradeOffer{value: 1010000000000000000 wei}(address(0), uint256(1010000000000000000), address(tokenRequested), uint256(2));
+        vm.prank(sellerGood);
 
-        assertEq(address(escrowswap).balance, 1010000000000000000, "Issue with amount of received eth.");
-    }
+        assertEq(address(escrowswap).balance, 0, "There is some eth in the vault already.");
+        escrowswap.createTradeOffer{value: amountEthToSell}(address(0), amountEthToSell, address(tokenRequested), 3);
+        assertEq(address(escrowswap).balance, amountEthToSell, "Not enough eth has been received by the vault.");
 
-
-    // 4. Expect revert if offered balance is 0 (meaning it was not set or the trade was deleted)
-    // TRIED FUZZ TESTING
-    /*
-    function testCreateTradeOfferSolventStorage(uint8 x) public {
-        vm.startPrank(sellerGood);
-        for (uint i = 0; i < x; i++) {
-            tokenOffered.approve(address(escrowswap), 1);
-            escrowswap.createTradeOffer(address(tokenOffered), uint256(1), address(tokenRequested), uint256(2));
-            tokenOffered.mint(sellerGood, 1);
-        }
         vm.stopPrank();
-        vm.expectRevert();
-        escrowswap.cancelTradeOffer(x);
-    } */
+    }
 
     /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
 
@@ -267,8 +251,8 @@ contract EscrowswapV1Test is Test, BrokenToken {
         }
     }
 
-    // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred.
-    function testAcceptTradeOfferWithEth(uint256 amountTokenToSell, uint256 amountEthToReceive) public {
+    // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred to seller.
+    function testAcceptTradeOfferWithSendingEth(uint256 amountTokenToSell, uint256 amountEthToReceive) public {
         vm.assume(amountTokenToSell > 0);
         vm.assume(amountTokenToSell < TOKEN_AMOUNT_LIMIT);
         vm.assume(amountEthToReceive > 0);
@@ -303,6 +287,33 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(address(buyerGood).balance, buyerEthPreBalance - amountEthToReceive - calculatedFee, "Buyer hasn't sent enough eth.");
         assertEq(tokenOffered.balanceOf(address(buyerGood)), amountTokenToSell, "Buyer hasn't received enough of tokenOffered.");
         assertEq(address(feePayoutAddress).balance, calculatedFee, "Not enough eth for the FeeAcc.");
+    }
+
+    // 3. Check whether the requested trade is getting accepted. Check if ETH gets transferred to buyer.
+    function testAcceptTradeOfferWithReceivingEth(uint256 amountEthToSell) public {
+        vm.assume(amountEthToSell > 0);
+        vm.assume(amountEthToSell < TOKEN_AMOUNT_LIMIT);
+        vm.deal(sellerGood, amountEthToSell);
+        tokenRequested.mint(buyerGood, 3);
+
+        uint256 buyerEthPreBalance = address(buyerGood).balance;
+        uint256 sellerEthPreBalance = address(sellerGood).balance;
+
+        // create an offer
+        vm.prank(sellerGood);
+        uint256 tradeId = escrowswap.createTradeOffer{value: amountEthToSell}(address(0), amountEthToSell, address(tokenRequested), 1);
+        assertEq(address(escrowswap).balance, amountEthToSell, "Not enough eth has been received by the vault.");
+        vm.stopPrank();
+
+        // accept the offer
+        vm.startPrank(buyerGood);
+        tokenRequested.approve(address(escrowswap), 2);
+        escrowswap.acceptTradeOffer(tradeId, address(tokenRequested), 1);
+        vm.stopPrank();
+
+        assertEq(address(escrowswap).balance, 0, "Eth hasn't left escrow.");
+        assertEq(address(sellerGood).balance, sellerEthPreBalance - amountEthToSell, "Seller hasn't sent enough eth.");
+        assertEq(address(buyerGood).balance, buyerEthPreBalance + amountEthToSell, "Buyer hasn't received enough eth.");
     }
 
     // Mimicking how fee is calculated in the actual contract
