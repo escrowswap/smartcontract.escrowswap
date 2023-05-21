@@ -156,6 +156,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             GAS_LIMIT
         );
 
+        console.log("Handling fee");
         //Fee Payment calculation and exec.
         _handleFeePayout(
             msg.sender,
@@ -198,7 +199,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         return fee;
     }
 
-    function getTradeOffer(uint256 _id) external view returns(TradeOffer memory) {
+    function getTradeOffer(uint256 _id) external view returns (TradeOffer memory) {
         return tradeOffers[_id];
     }
 

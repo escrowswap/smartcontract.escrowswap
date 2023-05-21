@@ -142,10 +142,11 @@ contract EscrowswapV1Test is Test, BrokenToken {
         uint256 amount_sell = 2;
         uint256 amount_get = 10;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+        uint256 tradeId;
 
         vm.startPrank(sellerGood);
         tokenOffered.approve(address(escrowswap), amount_sell);
-        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
 
         escrowswap.adjustTradeOffer(tradeId, address(tokenRequested_changed), amountToReceive_changed);
         assertEq(escrowswap.getTradeOffer(tradeId).tokenRequested, address(tokenRequested_changed), "No change has been made to token requested.");
@@ -178,18 +179,19 @@ contract EscrowswapV1Test is Test, BrokenToken {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 seller_amount = tokenRequested.balanceOf(address(buyerGood));
+        uint256 tradeId;
 
         vm.startPrank(sellerGood);
         tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
 
         assertEq(tokenOffered.balanceOf(address(escrowswap)), amount_sell, "Contract has not received the token.");
         assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount - amount_sell, "Contract hasn't received the tokens FROM the seller.");
 
-        escrowswap.cancelTradeOffer(0);
+        escrowswap.cancelTradeOffer(tradeId);
 
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens have not been sent back.");
-        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been sent back TO THE RIGHTFUL SELLER.");
+        assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been refunded to the trade owner.");
 
         vm.stopPrank();
     }
@@ -199,16 +201,17 @@ contract EscrowswapV1Test is Test, BrokenToken {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
+        uint256 tradeId;
 
         vm.startPrank(sellerGood);
         tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(tokenRequested), amount_get);
         vm.stopPrank();
 
         //transaction fails because of unauthorized access
         vm.startPrank(sellerBad);
         vm.expectRevert();
-        escrowswap.cancelTradeOffer(0);
+        escrowswap.cancelTradeOffer(tradeId);
         vm.stopPrank();
     }
 
@@ -224,8 +227,10 @@ contract EscrowswapV1Test is Test, BrokenToken {
         string memory erc20CurrentName = brokenERC20_NAME;
         bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
         if (!isCurrentErc20Revert) {
+            uint256 tradeId;
             uint256 calculatedFee = _calculateFee(address(brokenERC20), address(tokenOffered), amountToReceive);
             uint256 balance_buyerGood = tokenOffered.balanceOf(address(buyerGood));
+
             deal(address(brokenERC20), buyerGood, amountToReceive + calculatedFee);
             tokenOffered.mint(sellerGood, amountToSell);
 
@@ -235,7 +240,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
             // create an offer
             vm.startPrank(sellerGood);
             tokenOffered.approve(address(escrowswap), amountToSell);
-            uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(brokenERC20), amountToReceive);
+            tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(brokenERC20), amountToReceive);
             vm.stopPrank();
 
             // accept the offer
@@ -260,9 +265,11 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         uint256 buyerEthPreBalance;
         uint256 sellerEthPreBalance;
+        uint256 tradeId;
+        uint256 calculatedFee;
 
         // setting up the initial amounts
-        uint256 calculatedFee = _calculateFee(address(0), address(tokenOffered), amountEthToReceive);
+        calculatedFee = _calculateFee(address(0), address(tokenOffered), amountEthToReceive);
         vm.deal(buyerGood, amountEthToReceive + calculatedFee);
         tokenOffered.mint(sellerGood, amountTokenToSell);
         buyerEthPreBalance = address(buyerGood).balance;
@@ -274,7 +281,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
         // create an offer
         vm.startPrank(sellerGood);
         tokenOffered.approve(address(escrowswap), amountTokenToSell);
-        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountTokenToSell, address(0), amountEthToReceive);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountTokenToSell, address(0), amountEthToReceive);
         vm.stopPrank();
 
         // accept the offer
@@ -298,10 +305,11 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         uint256 buyerEthPreBalance = address(buyerGood).balance;
         uint256 sellerEthPreBalance = address(sellerGood).balance;
+        uint256 tradeId;
 
         // create an offer
         vm.prank(sellerGood);
-        uint256 tradeId = escrowswap.createTradeOffer{value: amountEthToSell}(address(0), amountEthToSell, address(tokenRequested), 1);
+        tradeId = escrowswap.createTradeOffer{value: amountEthToSell}(address(0), amountEthToSell, address(tokenRequested), 1);
         assertEq(address(escrowswap).balance, amountEthToSell, "Not enough eth has been received by the vault.");
         vm.stopPrank();
 
