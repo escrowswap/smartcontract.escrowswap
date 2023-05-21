@@ -58,11 +58,10 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.deal(sellerBad, 100 ether);
 
         //Tokens which are supposed to Revert
-        erc20RevertNames["MissingReturnToken"] = true;
-        erc20RevertNames["ReturnsFalseToken"] = true;
-        erc20RevertNames["TransferFeeToken"] = true;
+        erc20RevertNames["MissingReturnToken"] = true; // formally not ERC20
+        erc20RevertNames["ReturnsFalseToken"] = true; // formally not ERC20
+        erc20RevertNames["TransferFeeToken"] = true; // due to locked funds issue aren't supported
         erc20RevertNames["Uint96ERC20"] = true;
-        //erc20RevertNames["RevertToZeroToken"] = true;
 
     }
 
@@ -269,29 +268,41 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred.
-    function testAcceptTradeOfferWithEth() public {
-        uint256 amount_sell = 2;
-        uint256 amount_get = 5;
-        uint256 buyer_amount = address(buyerGood).balance;
-        uint256 seller_amount = address(sellerGood).balance;
+    function testAcceptTradeOfferWithEth(uint256 amountTokenToSell, uint256 amountEthToReceive) public {
+        vm.assume(amountTokenToSell > 0);
+        vm.assume(amountTokenToSell < TOKEN_AMOUNT_LIMIT);
+        vm.assume(amountEthToReceive > 0);
+        vm.assume(amountEthToReceive < TOKEN_AMOUNT_LIMIT);
 
+        uint256 buyerEthPreBalance;
+        uint256 sellerEthPreBalance;
+
+        // setting up the initial amounts
+        uint256 calculatedFee = _calculateFee(address(0), address(tokenOffered), amountEthToReceive);
+        vm.deal(buyerGood, amountEthToReceive + calculatedFee);
+        tokenOffered.mint(sellerGood, amountTokenToSell);
+        buyerEthPreBalance = address(buyerGood).balance;
+        sellerEthPreBalance = address(sellerGood).balance;
+
+        // set the address to receive the fee, for testing
+        escrowswap.setFeePayoutAddress(feePayoutAddress);
+
+        // create an offer
         vm.startPrank(sellerGood);
-        tokenOffered.approve(address(escrowswap), amount_sell);
-        escrowswap.createTradeOffer(address(tokenOffered), amount_sell, address(0), 1010000000000000000);
+        tokenOffered.approve(address(escrowswap), amountTokenToSell);
+        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountTokenToSell, address(0), amountEthToReceive);
         vm.stopPrank();
 
-        escrowswap.setFeePayoutAddress(address(sellerBad));
-
+        // accept the offer
         vm.startPrank(buyerGood);
-        escrowswap.acceptTradeOffer{value: 1110000000000000000 wei}(0, address(0), 1010000000000000000);
+        escrowswap.acceptTradeOffer{value: amountEthToReceive + calculatedFee}(tradeId, address(0), amountEthToReceive);
         vm.stopPrank();
 
-        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Issue with token amount escrow.");
-        assertEq(address(sellerGood).balance, seller_amount + 1010000000000000000, "Issue with token amount seller.");
-        assertLe(address(buyerGood).balance, buyer_amount - 1010000000000000000, "Issue with token amount buyer requested.");
-        assertEq(tokenOffered.balanceOf(address(buyerGood)), amount_sell, "Issue with token amount buyer offered.");
-        assertGt(address(sellerBad).balance, 0, "Issue with eth amount escrow.");
-
+        assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens haven't left escrow.");
+        assertEq(address(sellerGood).balance, sellerEthPreBalance + amountEthToReceive, "Seller hasn't received enough eth.");
+        assertEq(address(buyerGood).balance, buyerEthPreBalance - amountEthToReceive - calculatedFee, "Buyer hasn't sent enough eth.");
+        assertEq(tokenOffered.balanceOf(address(buyerGood)), amountTokenToSell, "Buyer hasn't received enough of tokenOffered.");
+        assertEq(address(feePayoutAddress).balance, calculatedFee, "Not enough eth for the FeeAcc.");
     }
 
     // Mimicking how fee is calculated in the actual contract
@@ -302,7 +313,6 @@ contract EscrowswapV1Test is Test, BrokenToken {
         }
         return fee;
     }
-
 
     /// ===================== TESTING FEE FUNCTIONALITY ======================================
 

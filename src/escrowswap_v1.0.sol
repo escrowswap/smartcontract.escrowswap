@@ -257,10 +257,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     }
 
     function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token, uint256 _gasLimit) private {
-        if (_amount == 0 || _dest == address(0)) {
-            return;
-        }
-
         // Handle ETH payment
         if (_token == address(0)) {
             require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
