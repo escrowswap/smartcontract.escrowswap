@@ -102,23 +102,6 @@ contract EscrowswapV1Test is Test, BrokenToken {
         }
     }
 
-    // 1.5 Check whether the function reverts on REVERT-ERC20
-    /*function testCreateTradeOfferRevertERC20(uint128 amountToSell, uint128 amountToReceive) useBrokenToken public {
-        vm.assume(amountToSell > 0);
-        vm.assume(amountToReceive > 0);
-
-        string memory erc20CurrentName = brokenERC20_NAME;
-        bool isCurrentErc20Revert = erc20RevertNames[erc20CurrentName];
-        if (isCurrentErc20Revert) {
-            deal(address(brokenERC20), sellerGood, amountToSell);
-
-            vm.startPrank(sellerGood);
-            brokenERC20.approve(address(escrowswap), amountToSell);
-            vm.expectRevert();
-            uint256 tradeId = escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
-        }
-    }*/
-
     // 2. Check whether the balance of the vault gets updated with ETH
     function testCreateTradeOfferWithEth(uint256 amountEthToSell) public {
         vm.assume(amountEthToSell > 0);
@@ -129,6 +112,58 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(address(escrowswap).balance, 0, "There is some eth in the vault already.");
         escrowswap.createTradeOffer{value: amountEthToSell}(address(0), amountEthToSell, address(tokenRequested), 3);
         assertEq(address(escrowswap).balance, amountEthToSell, "Not enough eth has been received by the vault.");
+
+        vm.stopPrank();
+    }
+
+    // 3.
+    // amountToSell == 0 represents an empty (DELETED) trade.
+    // creating an empty trade is not allowed.
+    function testRevertZeroSold() public {
+        uint256 amountToSell;
+        uint256 amountToReceive;
+
+        vm.prank(sellerGood);
+
+        // amountToSell == 0 represents an empty (DELETED) trade.
+        // creating an empty trade is not allowed.
+        amountToSell = 0;
+        amountToReceive = 1;
+        vm.expectRevert();
+        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.stopPrank();
+    }
+
+    // 4.
+    // amountToReceive == 0 represents an empty (DELETED) trade.
+    // creating an empty trade is not allowed.
+    function testRevertZeroRequested() public {
+        uint256 amountToSell;
+        uint256 amountToReceive;
+
+        vm.prank(sellerGood);
+
+        amountToSell = 1;
+        amountToReceive = 0;
+        vm.expectRevert();
+        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.stopPrank();
+    }
+
+    // 5.
+    // there is a set limit for the requested token amount due to possible overflow when calculating the fee.
+    function testRevertOverTheLimitRequested() public {
+        uint256 amountToSell;
+        uint256 amountToReceive;
+
+        vm.prank(sellerGood);
+
+        amountToSell = 1;
+        amountToReceive = TOKEN_AMOUNT_LIMIT + 1;
+        vm.expectRevert();
+        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
 
         vm.stopPrank();
     }
