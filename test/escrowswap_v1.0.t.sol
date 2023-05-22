@@ -119,7 +119,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 3.
     // amountToSell == 0 represents an empty (DELETED) trade.
     // creating an empty trade is not allowed.
-    function testRevertZeroSold() public {
+    function testRevertCreateTradeOfferZeroSold() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -129,8 +129,9 @@ contract EscrowswapV1Test is Test, BrokenToken {
         // creating an empty trade is not allowed.
         amountToSell = 0;
         amountToReceive = 1;
+        tokenOffered.approve(address(escrowswap), amountToSell);
         vm.expectRevert();
-        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
 
         vm.stopPrank();
     }
@@ -138,7 +139,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 4.
     // amountToReceive == 0 represents an empty (DELETED) trade.
     // creating an empty trade is not allowed.
-    function testRevertZeroRequested() public {
+    function testRevertCreateTradeOfferZeroRequested() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -146,15 +147,16 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         amountToSell = 1;
         amountToReceive = 0;
+        tokenOffered.approve(address(escrowswap), amountToSell);
         vm.expectRevert();
-        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
 
         vm.stopPrank();
     }
 
     // 5.
     // there is a set limit for the requested token amount due to possible overflow when calculating the fee.
-    function testRevertOverTheLimitRequested() public {
+    function testRevertCreateTradeOfferOverTheLimitRequested() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -162,8 +164,9 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         amountToSell = 1;
         amountToReceive = TOKEN_AMOUNT_LIMIT + 1;
+        tokenOffered.approve(address(escrowswap), amountToSell);
         vm.expectRevert();
-        escrowswap.createTradeOffer(address(brokenERC20), amountToSell, address(tokenRequested), amountToReceive);
+        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
 
         vm.stopPrank();
     }
@@ -204,6 +207,45 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.startPrank(sellerBad);
         vm.expectRevert();
         escrowswap.adjustTradeOffer(0, address(tokenOffered), 5);
+        vm.stopPrank();
+    }
+
+    // 3.
+    // there is a set limit for the requested token amount due to possible overflow when calculating the fee.
+    function testRevertAdjustTradeOfferOverTheLimitRequested() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 1;
+        uint256 tradeId;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.expectRevert();
+        escrowswap.adjustTradeOffer(tradeId, address(tokenOffered), amountToReceive + TOKEN_AMOUNT_LIMIT);
+
+        vm.stopPrank();
+    }
+
+    // 4.
+    // amountToSell == 0 represents an empty (DELETED) trade.
+    // adjusting an empty trade (cancelled or closed) is not allowed.
+    function testRevertAdjustTradeOfferZeroSold() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 1;
+        uint256 tradeId;
+
+        vm.startPrank(sellerGood);
+
+        // amountToSell == 0 represents an empty (DELETED) trade.
+        // adjusting a cancelled or closed trade is not allowed
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+        escrowswap.cancelTradeOffer(tradeId);
+
+        vm.expectRevert();
+        escrowswap.adjustTradeOffer(tradeId, address(tokenOffered), amountToSell);
+
         vm.stopPrank();
     }
 
