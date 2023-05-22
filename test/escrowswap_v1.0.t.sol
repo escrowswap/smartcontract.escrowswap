@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity 0.8.18;
 
 import "forge-std/Test.sol";
 import "../src/escrowswap_v1.0.sol";
@@ -267,6 +267,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
         escrowswap.cancelTradeOffer(tradeId);
 
+        assertEq(escrowswap.getTradeOffer(tradeId).amountOffered, 0, "Trade has not been deleted");
         assertEq(tokenOffered.balanceOf(address(escrowswap)), 0, "Tokens have not been sent back.");
         assertEq(tokenOffered.balanceOf(address(sellerGood)), seller_amount, "Tokens have not been refunded to the trade owner.");
 
@@ -295,6 +296,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     /// ------------ acceptTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred to all the parties.
+    // additionally: check whether transaction gets deleted after accepting
     function testAcceptTradeOfferBasic(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToSell < TOKEN_AMOUNT_LIMIT);
@@ -330,6 +332,8 @@ contract EscrowswapV1Test is Test, BrokenToken {
             assertEq(brokenERC20.balanceOf(address(sellerGood)), amountToReceive, "Seller has not received the right amount of tokens.");
             assertEq(tokenOffered.balanceOf(address(buyerGood)), amountToSell + balance_buyerGood, "Buyer has not received the right amount of tokens.");
             assertEq(brokenERC20.balanceOf(address(feePayoutAddress)), calculatedFee, "Fee has not been received in the right amount of tokens.");
+            // check whether the trade got deleted
+            assertEq(escrowswap.getTradeOffer(tradeId).amountOffered, 0, "Trade has not been deleted.");
         }
     }
 
@@ -399,6 +403,29 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(address(escrowswap).balance, 0, "Eth hasn't left escrow.");
         assertEq(address(sellerGood).balance, sellerEthPreBalance - amountEthToSell, "Seller hasn't sent enough eth.");
         assertEq(address(buyerGood).balance, buyerEthPreBalance + amountEthToSell, "Buyer hasn't received enough eth.");
+    }
+
+    // 4.
+    // amountToSell == 0 represents an empty (DELETED) trade.
+    // accepting an empty trade (cancelled or closed) is not allowed.
+    function testRevertAcceptTradeOfferZeroSold() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 1;
+        uint256 tradeId;
+
+        vm.startPrank(sellerGood);
+
+        // amountToSell == 0 represents an empty (DELETED) trade.
+        // accepting a cancelled or closed trade is not allowed
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+        escrowswap.cancelTradeOffer(tradeId);
+
+        vm.expectRevert();
+        // aligning the trade data by sending default values as parameters (since the trade has been deleted)
+        escrowswap.acceptTradeOffer(tradeId, address(0), 0);
+
+        vm.stopPrank();
     }
 
     // Mimicking how fee is calculated in the actual contract

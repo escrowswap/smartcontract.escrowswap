@@ -126,7 +126,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         _deleteTradeOffer(_id);
         emit TradeOfferCancelled(_id);
 
-        //Transfer from the vault back to the owner.
+        //Transfer from the vault back to the trade creator.
         _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered, GAS_LIMIT);
     }
 
@@ -244,14 +244,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest, uint256 _gasLimit) private {
         if (_token == address(0)) {
             require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
-
-            uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
-            (bool success, ) = _dest.call{value: _amount, gas: gas}("");
-            // If the ETH transfer fails, wrap the ETH and try send it as WETH.
-            if (!success) {
-                weth.deposit{value: _amount}();
-                IERC20(address(weth)).safeTransfer(_dest, _amount);
-            }
+            _handleEthTransfer(_dest, _amount, _gasLimit);
         } else {
             IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
         }
@@ -261,16 +254,19 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         // Handle ETH payment
         if (_token == address(0)) {
             require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
-
-            uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
-            (bool success, ) = _dest.call{value: _amount, gas: gas}("");
-            // If the ETH transfer fails, wrap the ETH and try send it as WETH.
-            if (!success) {
-                weth.deposit{value: _amount}();
-                IERC20(address(weth)).safeTransfer(_dest, _amount);
-            }
+            _handleEthTransfer(_dest, _amount, _gasLimit);
         } else {
             IERC20(_token).safeTransfer(_dest, _amount);
+        }
+    }
+
+    function _handleEthTransfer(address _dest, uint256 _amount, uint256 _gasLimit) private {
+        uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
+        (bool success, ) = _dest.call{value: _amount, gas: gas}("");
+        // If the ETH transfer fails, wrap the ETH and try send it as WETH.
+        if (!success) {
+            weth.deposit{value: _amount}();
+            IERC20(address(weth)).safeTransfer(_dest, _amount);
         }
     }
 
