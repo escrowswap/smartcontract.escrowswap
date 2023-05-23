@@ -568,7 +568,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
         }
     }
 
-    /// ===================== TESTING FEE FUNCTIONALITY ======================================
+    /// ------------ fee-related testing -------------------------------------------------------------------------------
 
     function test_SetBaseFee_Owner(uint16 _setFee) public {
         vm.assume(_setFee <= 5000);
