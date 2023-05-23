@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -12,11 +12,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     uint16 immutable private GAS_LIMIT;
     uint256 immutable private TOKEN_AMOUNT_LIMIT;
     IWETH immutable private weth;
-    bool private emergencyWithdrawal;
     address private feePayoutAddress;
     uint256 immutable private baseFeeDenominator;
     uint256 private idCounter;
     uint256 private baseFee;
+
+    bool public isEmergencyWithdrawalActive;
 
     struct TradeOffer {
         address seller;
@@ -42,7 +43,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     /// ------------ MODIFIERS ------------
 
     modifier nonEmergencyCall() {
-        require(!emergencyWithdrawal, "Emergency withdrawal is being active.");
+        require(!isEmergencyWithdrawalActive, "Emergency withdrawal is being active.");
         _;
     }
 
@@ -58,7 +59,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         GAS_LIMIT = 50_000;
         TOKEN_AMOUNT_LIMIT = 23158e69;
-        emergencyWithdrawal = false;
+        isEmergencyWithdrawalActive = false;
     }
 
     /// ------------ MAKER FUNCTIONS ------------
@@ -171,8 +172,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ MASTER FUNCTIONS ------------
 
-    function switchEmergencyWithdrawal() external onlyOwner {
-        emergencyWithdrawal = !emergencyWithdrawal;
+    function switchEmergencyWithdrawal(bool _switch) external onlyOwner {
+        isEmergencyWithdrawalActive = _switch;
     }
 
     function setTradingPairFee(bytes32 _hash, uint16 _fee) external onlyOwner {
@@ -270,7 +271,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    function _deleteTradeOffer(uint256 _id) private nonEmergencyCall {
+    function _deleteTradeOffer(uint256 _id) private {
         delete tradeOffers[_id];
     }
 

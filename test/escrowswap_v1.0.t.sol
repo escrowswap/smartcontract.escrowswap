@@ -437,6 +437,64 @@ contract EscrowswapV1Test is Test, BrokenToken {
         return fee;
     }
 
+    /// ------------ switchEmergencyWithdrawal--------------------------------------------------------------------------
+
+    function testSwitchEmergencyWithdrawalOwner(address randomUser) public {
+        assertEq(escrowswap.isEmergencyWithdrawalActive(), false);
+
+        escrowswap.switchEmergencyWithdrawal(true);
+        assertEq(escrowswap.isEmergencyWithdrawalActive(), true);
+
+        escrowswap.switchEmergencyWithdrawal(false);
+        assertEq(escrowswap.isEmergencyWithdrawalActive(), false);
+    }
+
+    function testSwitchEmergencyWithdrawalNonOwner(address randomUser) public {
+        vm.startPrank(randomUser);
+        vm.expectRevert();
+        escrowswap.switchEmergencyWithdrawal(false);
+        vm.stopPrank();
+    }
+
+    function testEmergencyWithdrawalReverts() public {
+        vm.startPrank(sellerGood);
+        tokenOffered.mint(sellerGood, 4);
+        tokenOffered.approve(address(escrowswap), 3);
+        uint256 mockTradeId = escrowswap.createTradeOffer(address(tokenOffered), 3, address(tokenRequested), 2);
+        vm.stopPrank();
+
+        // owner pauses the contract
+        escrowswap.switchEmergencyWithdrawal(true);
+        bool isEmergency = escrowswap.isEmergencyWithdrawalActive();
+
+        if (isEmergency) {
+
+            vm.startPrank(buyerGood);
+            // accepting trades during emergency is NOT ALLOWED
+            tokenRequested.approve(address(escrowswap), 3);
+            vm.expectRevert();
+            escrowswap.acceptTradeOffer(mockTradeId, address(tokenRequested), 2);
+            vm.stopPrank();
+
+            vm.startPrank(sellerGood);
+            // creating trades during emergency is NOT ALLOWED
+            tokenOffered.mint(sellerGood, 4);
+            tokenOffered.approve(address(escrowswap), 3);
+            vm.expectRevert();
+            escrowswap.createTradeOffer(address(tokenOffered), 3, address(tokenRequested), 2);
+
+            // adjusting trades is NOT ALLOWED
+            vm.expectRevert();
+            escrowswap.adjustTradeOffer(mockTradeId, address(tokenRequested), 2);
+
+            // cancelling trades is ALLOWED
+            escrowswap.cancelTradeOffer(mockTradeId);
+            assertEq(escrowswap.getTradeOffer(mockTradeId).amountRequested, 0, "Tokens haven't left escrow");
+
+            vm.stopPrank();
+        }
+    }
+
     /// ===================== TESTING FEE FUNCTIONALITY ======================================
 
     /// GAS test
