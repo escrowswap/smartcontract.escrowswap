@@ -79,7 +79,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
 
     // 1. Check whether the balance of the vault gets updated with BROKEN-ERC20 except REVERT-ERC20
-    function testCreateTradeOfferBrokenERC20(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
+    function test_CreateTradeOffer_BrokenERC20(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToSell < type(uint256).max);
         vm.assume(amountToReceive > 0);
@@ -110,7 +110,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 2. Check whether the balance of the vault gets updated with ETH
-    function testCreateTradeOfferWithEth(uint256 amountEthToSell) public {
+    function test_CreateTradeOffer_WithEth(uint256 amountEthToSell) public {
         vm.assume(amountEthToSell > 0);
         vm.deal(sellerGood, amountEthToSell);
 
@@ -126,7 +126,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 3.
     // amountToSell == 0 represents an empty (DELETED) trade.
     // creating an empty trade is not allowed.
-    function testRevertCreateTradeOfferZeroSold() public {
+    function testRevert_CreateTradeOffer_ZeroSold() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -146,7 +146,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 4.
     // amountToReceive == 0 represents an empty (DELETED) trade.
     // creating an empty trade is not allowed.
-    function testRevertCreateTradeOfferZeroRequested() public {
+    function testRevert_CreateTradeOffer_ZeroRequested() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -163,7 +163,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     // 5.
     // there is a set limit for the requested token amount due to possible overflow when calculating the fee.
-    function testRevertCreateTradeOfferOverTheLimitRequested() public {
+    function testRevert_CreateTradeOffer_OverTheLimitRequested() public {
         uint256 amountToSell;
         uint256 amountToReceive;
 
@@ -179,7 +179,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 6. Emitting the right event with the right vars.
-    function testCreateTradeOfferEmitEvent() public {
+    function testEmit_CreateTradeOffer() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 3;
 
@@ -196,7 +196,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested token and amount are changed
-    function testAdjustTradeOfferBasic(uint256 amountToReceive_changed, address tokenRequested_changed) public {
+    function test_AdjustTradeOffer_Basic(uint256 amountToReceive_changed, address tokenRequested_changed) public {
         vm.assume(amountToReceive_changed < TOKEN_AMOUNT_LIMIT);
 
         uint256 amount_sell = 2;
@@ -215,7 +215,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 2. Expect revert if trade is being adjusted by NOT SELLER
-    function testAdjustTradeOfferUnauthorized() public {
+    function testRevert_AdjustTradeOffer_Unauthorized() public {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
@@ -234,7 +234,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     // 3.
     // there is a set limit for the requested token amount due to possible overflow when calculating the fee.
-    function testRevertAdjustTradeOfferOverTheLimitRequested() public {
+    function testRevert_AdjustTradeOffer_OverTheLimitRequested() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 1;
         uint256 tradeId;
@@ -252,7 +252,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 4.
     // amountToSell == 0 represents an empty (DELETED) trade.
     // adjusting an empty trade (cancelled or closed) is not allowed.
-    function testRevertAdjustTradeOfferZeroSold() public {
+    function testRevert_AdjustTradeOffer_ZeroSold() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 1;
         uint256 tradeId;
@@ -272,7 +272,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 5. Emitting the right event with the right vars.
-    function testAdjustTradeOfferEmitEvent() public {
+    function testEmit_AdjustTradeOffer() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 3;
 
@@ -290,7 +290,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     /// ------------ cancelTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested trade is getting deleted
-    function testCancelTradeOffer() public {
+    function test_CancelTradeOffer() public {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 seller_amount = tokenRequested.balanceOf(address(buyerGood));
@@ -313,7 +313,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 2. Expect revert if trade is being adjusted by NOT SELLER
-    function testCancelTradeOfferUnauthorized() public {
+    function testRevert_CancelTradeOffer_Unauthorized() public {
         uint256 amount_sell = 2;
         uint256 amount_get = 5;
         uint256 buyer_amount = tokenRequested.balanceOf(address(buyerGood));
@@ -332,7 +332,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 3. Emitting the right event with the right vars.
-    function testCancelTradeOfferEmitEvent() public {
+    function testEmit_CancelTradeOffer() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 3;
 
@@ -351,7 +351,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     // 1. Check whether the requested trade is getting accepted. Check if ERC20 tokens get transferred to all the parties.
     // additionally: check whether transaction gets deleted after accepting
-    function testAcceptTradeOfferBasic(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
+    function test_AcceptTradeOffer_Basic(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
         vm.assume(amountToSell > 0);
         vm.assume(amountToSell < TOKEN_AMOUNT_LIMIT);
         vm.assume(amountToReceive > 0);
@@ -392,7 +392,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 2. Check whether the requested trade is getting accepted. Check if ETH gets transferred to seller.
-    function testAcceptTradeOfferWithSendingEth(uint256 amountTokenToSell, uint256 amountEthToReceive) public {
+    function test_AcceptTradeOffer_WithSendingEth(uint256 amountTokenToSell, uint256 amountEthToReceive) public {
         vm.assume(amountTokenToSell > 0);
         vm.assume(amountTokenToSell < TOKEN_AMOUNT_LIMIT);
         vm.assume(amountEthToReceive > 0);
@@ -432,7 +432,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 3. Check whether the requested trade is getting accepted. Check if ETH gets transferred to buyer.
-    function testAcceptTradeOfferWithReceivingEth(uint256 amountEthToSell) public {
+    function test_AcceptTradeOffer_WithReceivingEth(uint256 amountEthToSell) public {
         vm.assume(amountEthToSell > 0);
         vm.assume(amountEthToSell < TOKEN_AMOUNT_LIMIT);
         vm.deal(sellerGood, amountEthToSell);
@@ -462,7 +462,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 4.
     // amountToSell == 0 represents an empty (DELETED) trade.
     // accepting an empty trade (cancelled or closed) is not allowed.
-    function testRevertAcceptTradeOfferZeroSold() public {
+    function testRevert_AcceptTradeOfferZeroSold() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 1;
         uint256 tradeId;
@@ -483,7 +483,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     // 5. Emitting the right event with the right vars.
-    function testAcceptTradeOfferEmitEvent() public {
+    function testEmit_AcceptTradeOffer() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 3;
 
@@ -512,7 +512,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     /// ------------ switchEmergencyWithdrawal--------------------------------------------------------------------------
 
-    function testSwitchEmergencyWithdrawalOwner(address randomUser) public {
+    function test_SwitchEmergencyWithdrawal_Owner() public {
         assertEq(escrowswap.isEmergencyWithdrawalActive(), false);
 
         escrowswap.switchEmergencyWithdrawal(true);
@@ -522,14 +522,14 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(escrowswap.isEmergencyWithdrawalActive(), false);
     }
 
-    function testSwitchEmergencyWithdrawalNonOwner(address randomUser) public {
+    function testRevert_SwitchEmergencyWithdrawal_NonOwner(address randomUser) public {
         vm.startPrank(randomUser);
         vm.expectRevert();
         escrowswap.switchEmergencyWithdrawal(false);
         vm.stopPrank();
     }
 
-    function testEmergencyWithdrawalReverts() public {
+    function testRevert_EmergencyWithdrawal() public {
         vm.startPrank(sellerGood);
         tokenOffered.mint(sellerGood, 4);
         tokenOffered.approve(address(escrowswap), 3);
@@ -570,7 +570,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
 
     /// ===================== TESTING FEE FUNCTIONALITY ======================================
 
-    function testSetBaseFeeOwner(uint16 _setFee) public {
+    function test_SetBaseFee_Owner(uint16 _setFee) public {
         vm.assume(_setFee <= 5000);
         // must return default fee
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
@@ -581,13 +581,13 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(resultFee, _setFee, "Fee has been set wrong");
     }
 
-    function testGetTradingPairFee() public  {
+    function test_GetTradingPairFee() public  {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         uint256 result = escrowswap.getTradingPairFee(hash);
         assertEq(result, 2000, "Non-default fee has been received");
     }
 
-    function testSetTradingPairFee() public {
+    function test_SetTradingPairFee() public {
         uint16 fee1 = 4500;
         uint16 fee2 = 6500;
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
@@ -600,7 +600,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(result, fee2, "Wrong fee has been received");
     }
 
-    function testDeleteTradingPairFee() public {
+    function test_DeleteTradingPairFee() public {
         bytes32 hash = keccak256(abi.encodePacked(address(tokenRequested), address(tokenOffered)));
         escrowswap.setBaseFee(1000);
         escrowswap.setTradingPairFee(hash, 4500);
@@ -613,7 +613,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
         assertEq(result, 1000, "Non-default fee has been received");
     }
 
-    function testSetBaseFeeUnauthorized() public {
+    function testRevert_SetBaseFee_Unauthorized() public {
         vm.startPrank(sellerGood);
         vm.expectRevert();
         escrowswap.setBaseFee(5000);
