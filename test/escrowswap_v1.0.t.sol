@@ -30,6 +30,13 @@ contract EscrowswapV1Test is Test, BrokenToken {
         uint256 amountOffered;
         uint256 amountRequested;
     }
+
+    event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
+        address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
+    event TradeOfferAdjusted(uint256 indexed id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
+    event TradeOfferAccepted(uint256 indexed id, address indexed buyer);
+    event TradeOfferCancelled(uint256 indexed id);
+
     function setUp() public {
         escrowswap = new EscrowswapV1();
 
@@ -171,6 +178,21 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.stopPrank();
     }
 
+    // 6. Emitting the right event with the right vars.
+    function testCreateTradeOfferEmitEvent() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 3;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amountToSell);
+
+        vm.expectEmit();
+        emit TradeOfferCreated(0, sellerGood, address(tokenOffered), address(tokenRequested), amountToSell, amountToReceive);
+        escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.stopPrank();
+    }
+
     /// ------------ adjustTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested token and amount are changed
@@ -249,6 +271,22 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.stopPrank();
     }
 
+    // 5. Emitting the right event with the right vars.
+    function testAdjustTradeOfferEmitEvent() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 3;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.expectEmit();
+        emit TradeOfferAdjusted(tradeId, address(tokenOffered), amountToSell);
+        escrowswap.adjustTradeOffer(tradeId, address(tokenOffered), amountToSell);
+
+        vm.stopPrank();
+    }
+
     /// ------------ cancelTradeOffer ----------------------------------------------------------------------------------
 
     // 1. Check whether the requested trade is getting deleted
@@ -290,6 +328,22 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.startPrank(sellerBad);
         vm.expectRevert();
         escrowswap.cancelTradeOffer(tradeId);
+        vm.stopPrank();
+    }
+
+    // 3. Emitting the right event with the right vars.
+    function testCancelTradeOfferEmitEvent() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 3;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+
+        vm.expectEmit();
+        emit TradeOfferCancelled(tradeId);
+        escrowswap.cancelTradeOffer(tradeId);
+
         vm.stopPrank();
     }
 
@@ -424,6 +478,25 @@ contract EscrowswapV1Test is Test, BrokenToken {
         vm.expectRevert();
         // aligning the trade data by sending default values as parameters (since the trade has been deleted)
         escrowswap.acceptTradeOffer(tradeId, address(0), 0);
+
+        vm.stopPrank();
+    }
+
+    // 5. Emitting the right event with the right vars.
+    function testAcceptTradeOfferEmitEvent() public {
+        uint256 amountToSell = 1;
+        uint256 amountToReceive = 3;
+
+        vm.startPrank(sellerGood);
+        tokenOffered.approve(address(escrowswap), amountToSell);
+        uint256 tradeId = escrowswap.createTradeOffer(address(tokenOffered), amountToSell, address(tokenRequested), amountToReceive);
+        vm.stopPrank();
+
+        vm.startPrank(buyerGood);
+        tokenRequested.approve(address(escrowswap), 4);
+        vm.expectEmit();
+        emit TradeOfferAccepted(tradeId, buyerGood);
+        escrowswap.acceptTradeOffer(tradeId, address(tokenRequested), amountToReceive);
 
         vm.stopPrank();
     }

@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Date:</td>
-            <td class="headerValue">2023-05-23 16:53:39</td>
+            <td class="headerValue">2023-05-23 22:54:31</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntry">18</td>
@@ -129,7 +129,7 @@
 <a name="58"><span class="lineNum">      58 </span>                :            : </a>
 <a name="59"><span class="lineNum">      59 </span>                :            :         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);</a>
 <a name="60"><span class="lineNum">      60 </span>                :            :         GAS_LIMIT = 50_000;</a>
-<a name="61"><span class="lineNum">      61 </span>                :            :         TOKEN_AMOUNT_LIMIT = 23158e69;</a>
+<a name="61"><span class="lineNum">      61 </span>                :            :         TOKEN_AMOUNT_LIMIT = 23158e69; //expecting baseFee being &lt;= 5%</a>
 <a name="62"><span class="lineNum">      62 </span>                :            :         isEmergencyWithdrawalActive = false;</a>
 <a name="63"><span class="lineNum">      63 </span>                :            :     }</a>
 <a name="64"><span class="lineNum">      64 </span>                :            : </a>
@@ -256,7 +256,7 @@
 <a name="185"><span class="lineNum">     185 </span>                :            :     }</a>
 <a name="186"><span class="lineNum">     186 </span>                :            : </a>
 <a name="187"><span class="lineNum">     187 </span>                :            :     function setBaseFee(uint256 _fee) external onlyOwner {</a>
-<a name="188"><span class="lineNum">     188 </span>                :<span class="lineCov">          2 :         baseFee = _fee;</span></a>
+<a name="188"><span class="lineNum">     188 </span>                :<span class="lineCov">        257 :         baseFee = _fee;</span></a>
 <a name="189"><span class="lineNum">     189 </span>                :            :     }</a>
 <a name="190"><span class="lineNum">     190 </span>                :            : </a>
 <a name="191"><span class="lineNum">     191 </span>                :            :     function setFeePayoutAddress(address _addr) external onlyOwner {</a>
@@ -266,8 +266,8 @@
 <a name="195"><span class="lineNum">     195 </span>                :            :     /// ------------ VIEW FUNCTIONS ------------</a>
 <a name="196"><span class="lineNum">     196 </span>                :            : </a>
 <a name="197"><span class="lineNum">     197 </span>                :            :     function getTradingPairFee(bytes32 _hash) public view returns (uint256)  {</a>
-<a name="198"><span class="lineNum">     198 </span>                :<span class="lineCov">       8453 :         uint256 fee = tradingPairFees[_hash];</span></a>
-<a name="199"><span class="lineNum">     199 </span>        [<span class="branchCov" title="Branch 0 was taken 8450 times"> + </span><span class="branchCov" title="Branch 1 was taken 3 times"> + </span>]:<span class="lineCov">       8453 :         if(fee == 0) return baseFee;</span></a>
+<a name="198"><span class="lineNum">     198 </span>                :<span class="lineCov">       8709 :         uint256 fee = tradingPairFees[_hash];</span></a>
+<a name="199"><span class="lineNum">     199 </span>        [<span class="branchCov" title="Branch 0 was taken 8706 times"> + </span><span class="branchCov" title="Branch 1 was taken 3 times"> + </span>]:<span class="lineCov">       8709 :         if(fee == 0) return baseFee;</span></a>
 <a name="200"><span class="lineNum">     200 </span>                :<span class="lineCov">          3 :         return fee;</span></a>
 <a name="201"><span class="lineNum">     201 </span>                :            :     }</a>
 <a name="202"><span class="lineNum">     202 </span>                :            : </a>
@@ -283,8 +283,8 @@
 <a name="212"><span class="lineNum">     212 </span>                :            :         // the fee without rounding it to ZERO.</a>
 <a name="213"><span class="lineNum">     213 </span>                :            :         // In that case we request 1 unit of the token to be sent as a fee.</a>
 <a name="214"><span class="lineNum">     214 </span>                :<span class="lineCov">       4352 :         uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / baseFeeDenominator;</span></a>
-<a name="215"><span class="lineNum">     215 </span>        [<span class="branchCov" title="Branch 0 was taken 834 times"> + </span><span class="branchCov" title="Branch 1 was taken 4352 times"> + </span>]:<span class="lineCov">       4352 :         if (fee == 0) {</span></a>
-<a name="216"><span class="lineNum">     216 </span>                :<span class="lineCov">        834 :             fee = 1;</span></a>
+<a name="215"><span class="lineNum">     215 </span>        [<span class="branchCov" title="Branch 0 was taken 821 times"> + </span><span class="branchCov" title="Branch 1 was taken 4352 times"> + </span>]:<span class="lineCov">       4352 :         if (fee == 0) {</span></a>
+<a name="216"><span class="lineNum">     216 </span>                :<span class="lineCov">        821 :             fee = 1;</span></a>
 <a name="217"><span class="lineNum">     217 </span>                :            :         }</a>
 <a name="218"><span class="lineNum">     218 </span>                :            : </a>
 <a name="219"><span class="lineNum">     219 </span>                :<span class="lineCov">       4352 :         console.log(&quot;Executing fee transfer&quot;);</span></a>
