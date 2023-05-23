@@ -58,7 +58,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         GAS_LIMIT = 50_000;
-        TOKEN_AMOUNT_LIMIT = 23158e69;
+        TOKEN_AMOUNT_LIMIT = 23158e69; //expecting baseFee being <= 5%
         isEmergencyWithdrawalActive = false;
     }
 
