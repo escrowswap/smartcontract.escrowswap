@@ -9,14 +9,13 @@ import {IWETH} from "./resources/IWETH.sol";
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 immutable private TOKEN_AMOUNT_LIMIT;
+    bool public isEmergencyWithdrawalActive;
+    uint32 private baseFee;
     IWETH immutable private weth;
     address private feePayoutAddress;
     uint32 immutable private BASE_FEE_DENOMINATOR;
-    uint16 private baseFee;
     uint256 private idCounter;
-
-    bool public isEmergencyWithdrawalActive;
+    uint256 immutable private TOKEN_AMOUNT_LIMIT;
 
     struct TradeOffer {
         address seller;
@@ -29,7 +28,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     /// ------------ STORAGE ------------
 
     mapping(uint256 => TradeOffer) private tradeOffers;
-    mapping(bytes32 => uint16) private tradingPairFees;
+    mapping(bytes32 => uint32) private tradingPairFees;
 
     /// ------------ EVENTS ------------
 
@@ -172,7 +171,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         isEmergencyWithdrawalActive = _switch;
     }
 
-    function setTradingPairFee(bytes32 _hash, uint16 _fee) external onlyOwner {
+    function setTradingPairFee(bytes32 _hash, uint32 _fee) external onlyOwner {
         tradingPairFees[_hash] = _fee;
     }
 
@@ -180,7 +179,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         delete tradingPairFees[_hash];
     }
 
-    function setBaseFee(uint16 _fee) external onlyOwner {
+    function setBaseFee(uint32 _fee) external onlyOwner {
         baseFee = _fee;
     }
 
@@ -190,8 +189,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ VIEW FUNCTIONS ------------
 
-    function getTradingPairFee(bytes32 _hash) public view returns (uint16)  {
-        uint16 fee = tradingPairFees[_hash];
+    function getTradingPairFee(bytes32 _hash) public view returns (uint32)  {
+        uint32 fee = tradingPairFees[_hash];
         if(fee == 0) return baseFee;
         return fee;
     }
