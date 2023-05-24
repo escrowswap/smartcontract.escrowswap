@@ -73,10 +73,6 @@ contract EscrowswapV1Test is Test, BrokenToken {
     }
 
     /// ------------ createTradeOffer ----------------------------------------------------------------------------------
-    // (address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested)
-    //
-    // event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
-    // address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
 
     // 1. Check whether the balance of the vault gets updated with BROKEN-ERC20 except REVERT-ERC20
     function test_CreateTradeOffer_BrokenERC20(uint256 amountToSell, uint256 amountToReceive) useBrokenToken public {
@@ -462,7 +458,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     // 4.
     // amountToSell == 0 represents an empty (DELETED) trade.
     // accepting an empty trade (cancelled or closed) is not allowed.
-    function testRevert_AcceptTradeOfferZeroSold() public {
+    function testRevert_AcceptTradeOffer_ZeroSold() public {
         uint256 amountToSell = 1;
         uint256 amountToReceive = 1;
         uint256 tradeId;

@@ -9,13 +9,12 @@ import {IWETH} from "./resources/IWETH.sol";
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint16 immutable private GAS_LIMIT;
     uint256 immutable private TOKEN_AMOUNT_LIMIT;
     IWETH immutable private weth;
     address private feePayoutAddress;
-    uint256 immutable private baseFeeDenominator;
+    uint32 immutable private BASE_FEE_DENOMINATOR;
+    uint16 private baseFee;
     uint256 private idCounter;
-    uint256 private baseFee;
 
     bool public isEmergencyWithdrawalActive;
 
@@ -53,11 +52,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         idCounter = 0;
 
         baseFee = 2_000; // 2000 / 100000 = 2.0%
-        baseFeeDenominator = 100_000;
+        BASE_FEE_DENOMINATOR = 100_000;
         feePayoutAddress = owner();
 
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        GAS_LIMIT = 50_000;
         TOKEN_AMOUNT_LIMIT = 23158e69; //expecting baseFee being <= 5%
         isEmergencyWithdrawalActive = false;
     }
@@ -128,7 +126,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         emit TradeOfferCancelled(_id);
 
         //Transfer from the vault back to the trade creator.
-        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered, GAS_LIMIT);
+        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered);
     }
 
     /// ------------ TAKER FUNCTIONS ------------
@@ -153,11 +151,9 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             msg.sender,
             trade.amountRequested,
             trade.tokenRequested,
-            address(trade.seller),
-            GAS_LIMIT
+            address(trade.seller)
         );
 
-        console.log("Handling fee");
         //Fee Payment calculation and exec.
         _handleFeePayout(
             msg.sender,
@@ -167,7 +163,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         );
 
         //Transfer from the vault to buyer.
-        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered, GAS_LIMIT);
+        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
     }
 
     /// ------------ MASTER FUNCTIONS ------------
@@ -184,7 +180,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         delete tradingPairFees[_hash];
     }
 
-    function setBaseFee(uint256 _fee) external onlyOwner {
+    function setBaseFee(uint16 _fee) external onlyOwner {
         baseFee = _fee;
     }
 
@@ -194,8 +190,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ VIEW FUNCTIONS ------------
 
-    function getTradingPairFee(bytes32 _hash) public view returns (uint256)  {
-        uint256 fee = tradingPairFees[_hash];
+    function getTradingPairFee(bytes32 _hash) public view returns (uint16)  {
+        uint16 fee = tradingPairFees[_hash];
         if(fee == 0) return baseFee;
         return fee;
     }
@@ -211,19 +207,17 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         // Sometimes decimal number of a token is too low or it's not possible to calculate
         // the fee without rounding it to ZERO.
         // In that case we request 1 unit of the token to be sent as a fee.
-        uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / baseFeeDenominator;
+        uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / BASE_FEE_DENOMINATOR;
         if (fee == 0) {
             fee = 1;
         }
 
-        console.log("Executing fee transfer");
         // FEE Payment transaction
         _handleRelayTransfer(
             _sender,
             fee,
             _tokenReq,
-            feePayoutAddress,
-            GAS_LIMIT
+            feePayoutAddress
         );
     }
 
@@ -242,28 +236,27 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest, uint256 _gasLimit) private {
+    function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
             require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
-            _handleEthTransfer(_dest, _amount, _gasLimit);
+            _handleEthTransfer(_dest, _amount);
         } else {
             IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
         }
     }
 
-    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token, uint256 _gasLimit) private {
+    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) private {
         // Handle ETH payment
         if (_token == address(0)) {
             require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
-            _handleEthTransfer(_dest, _amount, _gasLimit);
+            _handleEthTransfer(_dest, _amount);
         } else {
             IERC20(_token).safeTransfer(_dest, _amount);
         }
     }
 
-    function _handleEthTransfer(address _dest, uint256 _amount, uint256 _gasLimit) private {
-        uint256 gas = (_gasLimit > gasleft()) ? gasleft() : _gasLimit;
-        (bool success, ) = _dest.call{value: _amount, gas: gas}("");
+    function _handleEthTransfer(address _dest, uint256 _amount) private {
+        (bool success, ) = _dest.call{value: _amount}("");
         // If the ETH transfer fails, wrap the ETH and try send it as WETH.
         if (!success) {
             weth.deposit{value: _amount}();
