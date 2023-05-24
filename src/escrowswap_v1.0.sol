@@ -4,16 +4,25 @@ import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IWETH} from "./resources/IWETH.sol";
-//import "forge-std/console.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    /// ------------ CUSTOM ERRORS ------------
+
+    error ActiveEmergencyWithdrawal();
+    error EmptyTrade();
+    error OverTokenAmountLimit();
+    error Unauthorized();
+    error MisalignedTradeData();
+
+    /// --------------------------------------
+
     bool public isEmergencyWithdrawalActive;
     uint32 private baseFee;
+    uint32 immutable private BASE_FEE_DENOMINATOR;
     IWETH immutable private weth;
     address private feePayoutAddress;
-    uint32 immutable private BASE_FEE_DENOMINATOR;
     uint256 private idCounter;
     uint256 immutable private TOKEN_AMOUNT_LIMIT;
 
@@ -41,7 +50,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     /// ------------ MODIFIERS ------------
 
     modifier nonEmergencyCall() {
-        require(!isEmergencyWithdrawalActive, "Emergency withdrawal is being active.");
+        if (isEmergencyWithdrawalActive) { revert ActiveEmergencyWithdrawal(); }
         _;
     }
 
@@ -55,7 +64,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         feePayoutAddress = owner();
 
         weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        TOKEN_AMOUNT_LIMIT = 23158e69; //expecting baseFee being <= 5%
+        TOKEN_AMOUNT_LIMIT = 23158e69;
         isEmergencyWithdrawalActive = false;
     }
 
@@ -68,9 +77,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     nonEmergencyCall
     returns (uint256 tradeId)
     {
-        require(_amountOffered > 0, "Empty trade.");
-        require(_amountRequested > 0, "Empty trade.");
-        require(_amountRequested < TOKEN_AMOUNT_LIMIT, "Value cannot be processed due to potential overflow.");
+        if (_amountOffered == 0 || _amountRequested == 0) { revert EmptyTrade(); }
+        if (_amountRequested > TOKEN_AMOUNT_LIMIT) { revert OverTokenAmountLimit(); }
 
         tradeId = idCounter;
         TradeOffer memory newOffer = TradeOffer({
@@ -100,11 +108,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     external
     nonEmergencyCall
     {
-        require(_amountRequestedUpdated < TOKEN_AMOUNT_LIMIT, "Value cannot be processed due to potential overflow.");
-
+        if (_amountRequestedUpdated > TOKEN_AMOUNT_LIMIT) { revert OverTokenAmountLimit(); }
         TradeOffer storage trade = tradeOffers[_id];
-        require(trade.seller == msg.sender, "Unauthorized access to the trade.");
-        require(trade.amountOffered > 0, "Empty trade.");
+        if (trade.seller != msg.sender) { revert Unauthorized(); }
+        if (trade.amountOffered == 0) { revert EmptyTrade(); }
 
         trade.amountRequested = _amountRequestedUpdated;
         trade.tokenRequested = _tokenRequestedUpdated;
@@ -118,8 +125,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         uint256 trade_amountOffered = tradeOffers[_id].amountOffered;
         address trade_tokenOffered = tradeOffers[_id].tokenOffered;
 
-        require(trade_amountOffered > 0, "Empty trade.");
-        require(trade_seller == msg.sender, "Unauthorized access to the trade.");
+        if (trade_amountOffered == 0) { revert EmptyTrade(); }
+        if (trade_seller != msg.sender) { revert Unauthorized(); }
 
         _deleteTradeOffer(_id);
         emit TradeOfferCancelled(_id);
@@ -138,9 +145,9 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     {
         TradeOffer memory trade = tradeOffers[_id];
 
-        require(trade.tokenRequested == _tokenRequested, "Trade data misaligned");
-        require(trade.amountRequested == _amountRequested, "Trade data misaligned");
-        require(trade.amountOffered > 0, "Empty trade.");
+        if (trade.tokenRequested != _tokenRequested) { revert MisalignedTradeData(); }
+        if (trade.amountRequested != _amountRequested) { revert MisalignedTradeData(); }
+        if (trade.amountOffered == 0) { revert EmptyTrade(); }
 
         _deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
