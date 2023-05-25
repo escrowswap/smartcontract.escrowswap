@@ -1,89 +1,280 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity 0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
-
-
-interface IERC20 {
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-}
+import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IWETH} from "./resources/IWETH.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
 
-    event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
-        address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
-    event TradeOfferAdjusted(uint256 id, uint256 indexed amountOfferedUpdated, uint256 amountRequestedUpdated); //can be vulnerable when user pays and then this happens
-    event TradeOfferAccepted(uint256 id);
-    event TradeOfferCancelled(uint256 id);
+    /// ------------ CUSTOM ERRORS ------------
 
-    TradeOffer[] public tradeOffers;
+    error ActiveEmergencyWithdrawal();
+    error EmptyTrade();
+    error OverTokenAmountLimit();
+    error Unauthorized();
+    error MisalignedTradeData();
 
-    // Getting packed by bit-shifting
+    /// --------------------------------------
+
+    bool public isEmergencyWithdrawalActive;
+    uint32 private baseFee;
+    uint32 immutable private BASE_FEE_DENOMINATOR;
+    IWETH immutable private weth;
+    address private feePayoutAddress;
+    uint256 private idCounter;
+    uint256 immutable private TOKEN_AMOUNT_LIMIT;
+
     struct TradeOffer {
-        uint256 id;
         address seller;
-        address buyer;
         address tokenOffered;
         address tokenRequested;
         uint256 amountOffered;
         uint256 amountRequested;
-        bool usingCollateral; // questionable, might be changed later
     }
+
+    /// ------------ STORAGE ------------
+
+    mapping(uint256 => TradeOffer) private tradeOffers;
+    mapping(bytes32 => uint32) private tradingPairFees;
+
+    /// ------------ EVENTS ------------
+
+    event TradeOfferCreated(uint256 id, address indexed seller, address indexed tokenOffered,
+        address tokenRequested, uint256 indexed amountOffered, uint256 amountRequested);
+    event TradeOfferAdjusted(uint256 indexed id, address tokenRequestedUpdated, uint256 amountRequestedUpdated);
+    event TradeOfferAccepted(uint256 indexed id, address indexed buyer);
+    event TradeOfferCancelled(uint256 indexed id);
+
+    /// ------------ MODIFIERS ------------
+
+    modifier nonEmergencyCall() {
+        if (isEmergencyWithdrawalActive) { revert ActiveEmergencyWithdrawal(); }
+        _;
+    }
+
+    /// ------------ CONSTRUCTOR ------------
 
     constructor() {
+        idCounter = 0;
+
+        baseFee = 2_000; // 2000 / 100000 = 2.0%
+        BASE_FEE_DENOMINATOR = 100_000;
+        feePayoutAddress = owner();
+
+        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        TOKEN_AMOUNT_LIMIT = 23158e69;
+        isEmergencyWithdrawalActive = false;
     }
 
-    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested) external payable nonReentrant {
-        IERC20(_tokenOffered).transferFrom(
-            msg.sender,
-            address(this),
-            _amountOffered
-        );
+    /// ------------ MAKER FUNCTIONS ------------
 
+    function createTradeOffer(address _tokenOffered, uint256 _amountOffered, address _tokenRequested, uint256 _amountRequested)
+    payable
+    external
+    nonReentrant
+    nonEmergencyCall
+    returns (uint256 tradeId)
+    {
+        if (_amountOffered == 0 || _amountRequested == 0) { revert EmptyTrade(); }
+        if (_amountRequested > TOKEN_AMOUNT_LIMIT) { revert OverTokenAmountLimit(); }
+
+        tradeId = idCounter;
         TradeOffer memory newOffer = TradeOffer({
-            id: tradeOffers.length,
             seller: msg.sender,
-            buyer: address(0),
             tokenOffered: _tokenOffered,
             tokenRequested: _tokenRequested,
             amountOffered: _amountOffered,
-            amountRequested: _amountRequested,
-            usingCollateral: false
+            amountRequested: _amountRequested
         });
 
-        tradeOffers.push(newOffer);
+        tradeOffers[idCounter] = newOffer;
 
-        emit TradeOfferCreated(newOffer.id, newOffer.seller, newOffer.tokenOffered,
+        ++idCounter;
+
+        emit TradeOfferCreated(tradeId, newOffer.seller, newOffer.tokenOffered,
             newOffer.tokenRequested, newOffer.amountOffered, newOffer.amountRequested);
-    }
 
-    function acceptTradeOffer(uint256 id) external {
-        tradeOffers[id].buyer = msg.sender;
-        TradeOffer storage trade = tradeOffers[id];
-
-        IERC20(trade.tokenRequested).transferFrom(
+        _handleIncomingTransfer(
             msg.sender,
-            address(trade.seller),
-            trade.amountRequested
-        );
-
-        IERC20(trade.tokenOffered).transfer(
-            msg.sender,
-            trade.amountOffered
+            _amountOffered,
+            _tokenOffered,
+            address(this)
         );
     }
 
-    function adjustTradeOffer() external  {
+    function adjustTradeOffer(uint256 _id, address _tokenRequestedUpdated, uint256 _amountRequestedUpdated)
+    external
+    nonEmergencyCall
+    {
+        if (_amountRequestedUpdated > TOKEN_AMOUNT_LIMIT) { revert OverTokenAmountLimit(); }
+        TradeOffer storage trade = tradeOffers[_id];
+        if (trade.seller != msg.sender) { revert Unauthorized(); }
+        if (trade.amountOffered == 0) { revert EmptyTrade(); }
 
+        trade.amountRequested = _amountRequestedUpdated;
+        trade.tokenRequested = _tokenRequestedUpdated;
+
+        emit TradeOfferAdjusted(_id, _tokenRequestedUpdated, _amountRequestedUpdated);
     }
 
-    function cancelTradeOffer() external {
+    function cancelTradeOffer(uint256 _id) external nonReentrant {
+        //saving gas: only necessary vars in the memory
+        address trade_seller = tradeOffers[_id].seller;
+        uint256 trade_amountOffered = tradeOffers[_id].amountOffered;
+        address trade_tokenOffered = tradeOffers[_id].tokenOffered;
 
+        if (trade_amountOffered == 0) { revert EmptyTrade(); }
+        if (trade_seller != msg.sender) { revert Unauthorized(); }
+
+        _deleteTradeOffer(_id);
+        emit TradeOfferCancelled(_id);
+
+        //Transfer from the vault back to the trade creator.
+        _handleOutgoingTransfer(address(trade_seller), trade_amountOffered, trade_tokenOffered);
     }
 
-    function setFeeLevel(uint8 fee) external onlyOwner {
+    /// ------------ TAKER FUNCTIONS ------------
 
+    function acceptTradeOffer(uint256 _id, address _tokenRequested, uint256 _amountRequested)
+    payable
+    external
+    nonReentrant
+    nonEmergencyCall
+    {
+        TradeOffer memory trade = tradeOffers[_id];
+
+        if (trade.tokenRequested != _tokenRequested) { revert MisalignedTradeData(); }
+        if (trade.amountRequested != _amountRequested) { revert MisalignedTradeData(); }
+        if (trade.amountOffered == 0) { revert EmptyTrade(); }
+
+        _deleteTradeOffer(_id);
+        emit TradeOfferAccepted(_id, msg.sender);
+
+        //Transfer from buyer to seller.
+        _handleRelayTransfer(
+            msg.sender,
+            trade.amountRequested,
+            trade.tokenRequested,
+            address(trade.seller)
+        );
+
+        //Fee Payment calculation and exec.
+        _handleFeePayout(
+            msg.sender,
+            trade.amountRequested,
+            trade.tokenRequested,
+            trade.tokenOffered
+        );
+
+        //Transfer from the vault to buyer.
+        _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
+    }
+
+    /// ------------ MASTER FUNCTIONS ------------
+
+    function switchEmergencyWithdrawal(bool _switch) external onlyOwner {
+        isEmergencyWithdrawalActive = _switch;
+    }
+
+    function setTradingPairFee(bytes32 _hash, uint32 _fee) external onlyOwner {
+        tradingPairFees[_hash] = _fee;
+    }
+
+    function deleteTradingPairFee(bytes32 _hash) external onlyOwner {
+        delete tradingPairFees[_hash];
+    }
+
+    function setBaseFee(uint32 _fee) external onlyOwner {
+        baseFee = _fee;
+    }
+
+    function setFeePayoutAddress(address _addr) external onlyOwner {
+        feePayoutAddress = _addr;
+    }
+
+    /// ------------ VIEW FUNCTIONS ------------
+
+    function getTradingPairFee(bytes32 _hash) public view returns (uint32)  {
+        uint32 fee = tradingPairFees[_hash];
+        if(fee == 0) return baseFee;
+        return fee;
+    }
+
+    function getTradeOffer(uint256 _id) external view returns (TradeOffer memory) {
+        return tradeOffers[_id];
+    }
+
+    /// ------------ HELPER FUNCTIONS ------------
+
+    function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) private {
+
+        // Sometimes decimal number of a token is too low or it's not possible to calculate
+        // the fee without rounding it to ZERO.
+        // In that case we request 1 unit of the token to be sent as a fee.
+        uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / BASE_FEE_DENOMINATOR;
+        if (fee == 0) {
+            fee = 1;
+        }
+
+        // FEE Payment transaction
+        _handleRelayTransfer(
+            _sender,
+            fee,
+            _tokenReq,
+            feePayoutAddress
+        );
+    }
+
+    function _handleIncomingTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
+        if (_token == address(0)) {
+            require(msg.value >= _amount, "_handleIncomingTransfer msg value less than expected amount");
+        } else {
+            // We must check the balance that was actually transferred to this contract,
+            // as some tokens impose a transfer fee and would not actually transfer the
+            // full amount to the escrowswap, resulting in potentially locked funds
+            IERC20 token = IERC20(_token);
+            uint256 beforeBalance = token.balanceOf(_dest);
+            token.safeTransferFrom(_sender, _dest, _amount);
+            uint256 afterBalance = token.balanceOf(_dest);
+            require(beforeBalance + _amount == afterBalance, "_handleIncomingTransfer token transfer call did not transfer expected amount");
+        }
+    }
+
+    function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
+        if (_token == address(0)) {
+            require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
+            _handleEthTransfer(_dest, _amount);
+        } else {
+            IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
+        }
+    }
+
+    function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) private {
+        // Handle ETH payment
+        if (_token == address(0)) {
+            require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
+            _handleEthTransfer(_dest, _amount);
+        } else {
+            IERC20(_token).safeTransfer(_dest, _amount);
+        }
+    }
+
+    function _handleEthTransfer(address _dest, uint256 _amount) private {
+        (bool success, ) = _dest.call{value: _amount}("");
+        // If the ETH transfer fails, wrap the ETH and try send it as WETH.
+        if (!success) {
+            weth.deposit{value: _amount}();
+            IERC20(address(weth)).safeTransfer(_dest, _amount);
+        }
+    }
+
+    function _deleteTradeOffer(uint256 _id) private {
+        delete tradeOffers[_id];
+    }
+
+    function _getTradingPairHash(address _token0, address _token1) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_token0, _token1));
     }
 }
