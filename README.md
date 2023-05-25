@@ -18,7 +18,7 @@
 ---
 ## FAQ
 
-### Super High-level architecture
+#### Super High-level architecture
 ```
 
    ,-.                                                          ,-. 
@@ -46,21 +46,21 @@
     |                               |                            |
 ```
 
-### For everyone
+#### For everyone
 - if `ETH` transfer fails, we try wrapping it and sending as `WETH`.
 - if `EMERGENCY WITHDRAWAL` is active, only calls to `cancelTradeOffer()` are allowed.
 
-### For trade makers
+#### For trade makers
 - send the whole offered amount to the contract's vault when creating a trade.
 - **do not pay any fees**
 - can adjust the trade
 - can cancel the trade and refund
 
-### For trade takers
+#### For trade takers
 - accept the trade, receive the funds from the vault, send funds to the maker
 - **pay the calculated fee**
 
-### For the fee payment
+#### For the fee payment
 - default fee is initially set to 2% of the `_tokenAmount` in `_tokenRequested`
 - default fee can be adjusted to provide the best rates to stay competitive
 - default fee is expected to be always `< 5%` to avoid overflow error during execution.
@@ -77,18 +77,18 @@
 
 ---
 ## Maker (seller) functions
-### `createTradeOffer`
+#### `createTradeOffer`
 ##### `(_tokenOffered, _amountOffered, _tokenRequested, _amountRequested)`
 - saves tradeOffer in the contract
 - creates an on-chain event
 - sends the full `_amountOffered` of `_tokenOffered` that user is willing to sell.
 ---
-### `adjustTradeOffer`
+#### `adjustTradeOffer`
 ##### `(_id, _tokenRequestedUpdated, _amountRequestedUpdated)`
 - finds the trade by id and checks if the user is authorized to adjust the offer.
 - user is allowed to change the requested ERC20 token or/and the requested amount.
 ---
-### `cancelTradeOffer`
+#### `cancelTradeOffer`
 ##### `(_id)`
 - finds the trade by id and checks if the user is authorized to cancel the offer.
 - cancels the offer, deletes it from the storage and refunds the tokens.
@@ -97,7 +97,7 @@
 
 ## Taker (buyer) functions
 
-### `acceptTradeOffer`
+#### `acceptTradeOffer`
 ##### `(_id, _tokenRequested, _amountRequested)`
 - checks if `_tokenRequested` and `_amountRequested` accepted by the taker actually align with the current state of the trade.
 - sends the `_amountRequested` of `_tokenRequested` from taker address to maker address.
@@ -109,22 +109,22 @@
 
 ## Escrowswap's owner functions
 
-### `swithcEmergencyWithdrawal`
+#### `swithcEmergencyWithdrawal`
 ##### `(switch)`
 - enables or disables the EMERGENCY WITHDRAWAL
 ---
-### `setTraidingPairFee`
+#### `setTraidingPairFee`
 ##### `(_traidingPairhash, _fee)`
 - sets a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
 ---
-### `deletesTraidingPairFee`
+#### `deletesTraidingPairFee`
 ##### `(_traidingPairhash)`
 - deletes a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
 ---
-### `setBaseFee`
+#### `setBaseFee`
 ##### `(_fee)`
 - sets a base fee rate for a all the token pairs which don't have unique fee rates.
 ---
-### `setFeePayoutAddress`
+#### `setFeePayoutAddress`
 ##### `(_addr)`
 - sets an `_addr` which will receive the fees on behalf of escrowswap
