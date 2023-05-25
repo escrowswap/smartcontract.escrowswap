@@ -4,9 +4,9 @@
 
 ---
 
-> `OTC trade` - OTC stands for "Over-the-Counter." In the context of financial markets, an OTC trade refers to a transaction that takes place directly between two parties without going through an exchange.
+`OTC trade` - OTC stands for "Over-the-Counter." In the context of financial markets, an OTC trade refers to a transaction that takes place directly between two parties without going through an exchange.
 
-> [www.escrowswap.xyz](https://escrowswap.xyz) - web3 platform, which allows users to create and adjust otc trades. All open trades are listed on the website for the users to navigate easily.
+[www.escrowswap.xyz](https://escrowswap.xyz) - web3 platform, which allows users to create and adjust otc trades. All open trades are listed on the website for the users to navigate easily.
 
 ## Why is escrowswap useful?
 - `On-chain mechanism` escrowswap offers secure experience by managing the transactions on-chain. **Trust the code.**
@@ -77,54 +77,54 @@
 
 ---
 ## Maker (seller) functions
-> ### `createTradeOffer`
-> ##### `(_tokenOffered, _amountOffered, _tokenRequested, _amountRequested)`
-> - saves tradeOffer in the contract
-> - creates an on-chain event
-> - sends the full `_amountOffered` of `_tokenOffered` that user is willing to sell.
-
->### `adjustTradeOffer`
-> ##### `(_id, _tokenRequestedUpdated, _amountRequestedUpdated)`
-> - finds the trade by id and checks if the user is authorized to adjust the offer.
-> - user is allowed to change the requested ERC20 token or/and the requested amount.
-
-> ### `cancelTradeOffer`
-> ##### `(_id)`
-> - finds the trade by id and checks if the user is authorized to cancel the offer.
-> - cancels the offer, deletes it from the storage and refunds the tokens.
+### `createTradeOffer`
+##### `(_tokenOffered, _amountOffered, _tokenRequested, _amountRequested)`
+- saves tradeOffer in the contract
+- creates an on-chain event
+- sends the full `_amountOffered` of `_tokenOffered` that user is willing to sell.
+---
+### `adjustTradeOffer`
+##### `(_id, _tokenRequestedUpdated, _amountRequestedUpdated)`
+- finds the trade by id and checks if the user is authorized to adjust the offer.
+- user is allowed to change the requested ERC20 token or/and the requested amount.
+---
+### `cancelTradeOffer`
+##### `(_id)`
+- finds the trade by id and checks if the user is authorized to cancel the offer.
+- cancels the offer, deletes it from the storage and refunds the tokens.
 
 ---
 
 ## Taker (buyer) functions
 
-> ### `acceptTradeOffer`
-> ##### `(_id, _tokenRequested, _amountRequested)`
-> - checks if `_tokenRequested` and `_amountRequested` accepted by the taker actually align with the current state of the trade.
-> - sends the `_amountRequested` of `_tokenRequested` from taker address to maker address.
-> - sends calculated `FEE` in `_tokenRequested` to the escrowswap's payout address.
-> - sends the trade's `_amountOffered` in `_tokenOffered` to the taker.
-> - deletes the trade from the storage.
+### `acceptTradeOffer`
+##### `(_id, _tokenRequested, _amountRequested)`
+- checks if `_tokenRequested` and `_amountRequested` accepted by the taker actually align with the current state of the trade.
+- sends the `_amountRequested` of `_tokenRequested` from taker address to maker address.
+- sends calculated `FEE` in `_tokenRequested` to the escrowswap's payout address.
+- sends the trade's `_amountOffered` in `_tokenOffered` to the taker.
+- deletes the trade from the storage.
 
 ---
 
 ## Escrowswap's owner functions
 
-> ### `swithcEmergencyWithdrawal`
-> ##### `(switch)`
-> - enables or disables the EMERGENCY WITHDRAWAL
-
-> ### `setTraidingPairFee`
-> ##### `(_traidingPairhash, _fee)`
-> - sets a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
-
-> ### `deletesTraidingPairFee`
-> ##### `(_traidingPairhash)`
-> - deletes a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
-
-> ### `setBaseFee`
-> ##### `(_fee)`
-> - sets a base fee rate for a all the token pairs which don't have unique fee rates.
-
-> ### `setFeePayoutAddress`
-> ##### `(_addr)`
-> - sets an `_addr` which will receive the fees on behalf of escrowswap
+### `swithcEmergencyWithdrawal`
+##### `(switch)`
+- enables or disables the EMERGENCY WITHDRAWAL
+---
+### `setTraidingPairFee`
+##### `(_traidingPairhash, _fee)`
+- sets a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
+---
+### `deletesTraidingPairFee`
+##### `(_traidingPairhash)`
+- deletes a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
+---
+### `setBaseFee`
+##### `(_fee)`
+- sets a base fee rate for a all the token pairs which don't have unique fee rates.
+---
+### `setFeePayoutAddress`
+##### `(_addr)`
+- sets an `_addr` which will receive the fees on behalf of escrowswap
