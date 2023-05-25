@@ -8,6 +8,7 @@
 
 [www.escrowswap.xyz](https://escrowswap.xyz) - web3 platform, which allows users to create and adjust otc trades. All open trades are listed on the website for the users to navigate easily.
 
+---
 ## Why is escrowswap useful?
 - `On-chain mechanism` escrowswap offers secure experience by managing the transactions on-chain. **Trust the code.**
 - `Zero slippage` OTC deals are particularly **useful for large volume transactions**, as they provide higher liquidity. In decentralized exchanges, slippage (the price difference between the expected price and the executed price) may occur, especially for large orders or illiquid tokens.
@@ -82,12 +83,12 @@
 - saves tradeOffer in the contract
 - creates an on-chain event
 - sends the full `_amountOffered` of `_tokenOffered` that user is willing to sell.
----
+
 #### `adjustTradeOffer`
 ##### `(_id, _tokenRequestedUpdated, _amountRequestedUpdated)`
 - finds the trade by id and checks if the user is authorized to adjust the offer.
 - user is allowed to change the requested ERC20 token or/and the requested amount.
----
+
 #### `cancelTradeOffer`
 ##### `(_id)`
 - finds the trade by id and checks if the user is authorized to cancel the offer.
@@ -112,19 +113,19 @@
 #### `swithcEmergencyWithdrawal`
 ##### `(switch)`
 - enables or disables the EMERGENCY WITHDRAWAL
----
+
 #### `setTraidingPairFee`
 ##### `(_traidingPairhash, _fee)`
 - sets a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
----
+
 #### `deletesTraidingPairFee`
 ##### `(_traidingPairhash)`
 - deletes a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
----
+
 #### `setBaseFee`
 ##### `(_fee)`
 - sets a base fee rate for a all the token pairs which don't have unique fee rates.
----
+
 #### `setFeePayoutAddress`
 ##### `(_addr)`
 - sets an `_addr` which will receive the fees on behalf of escrowswap
