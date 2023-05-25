@@ -78,19 +78,25 @@
 
 ---
 ## Maker (seller) functions
-#### `createTradeOffer`
-##### `(_tokenOffered, _amountOffered, _tokenRequested, _amountRequested)`
+``` 
+createTradeOffer
+(_tokenOffered, _amountOffered, _tokenRequested, _amountRequested)
+```
 - saves tradeOffer in the contract
 - creates an on-chain event
 - sends the full `_amountOffered` of `_tokenOffered` that user is willing to sell.
 
-#### `adjustTradeOffer`
-##### `(_id, _tokenRequestedUpdated, _amountRequestedUpdated)`
+```
+adjustTradeOffer
+(_id, _tokenRequestedUpdated, _amountRequestedUpdated)
+```
 - finds the trade by id and checks if the user is authorized to adjust the offer.
 - user is allowed to change the requested ERC20 token or/and the requested amount.
 
-#### `cancelTradeOffer`
-##### `(_id)`
+```
+cancelTradeOffer
+(_id)
+```
 - finds the trade by id and checks if the user is authorized to cancel the offer.
 - cancels the offer, deletes it from the storage and refunds the tokens.
 
@@ -98,8 +104,10 @@
 
 ## Taker (buyer) functions
 
-#### `acceptTradeOffer`
-##### `(_id, _tokenRequested, _amountRequested)`
+```
+acceptTradeOffer
+(_id, _tokenRequested, _amountRequested)
+```
 - checks if `_tokenRequested` and `_amountRequested` accepted by the taker actually align with the current state of the trade.
 - sends the `_amountRequested` of `_tokenRequested` from taker address to maker address.
 - sends calculated `FEE` in `_tokenRequested` to the escrowswap's payout address.
@@ -110,22 +118,32 @@
 
 ## Escrowswap's owner functions
 
-#### `swithcEmergencyWithdrawal`
-##### `(switch)`
+```
+swithcEmergencyWithdrawal
+(switch)
+```
 - enables or disables the EMERGENCY WITHDRAWAL
 
-#### `setTraidingPairFee`
-##### `(_traidingPairhash, _fee)`
+```
+setTraidingPairFee
+(_traidingPairhash, _fee)
+```
 - sets a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
 
-#### `deletesTraidingPairFee`
-##### `(_traidingPairhash)`
+```
+deleteTraidingPairFee
+(_traidingPairhash)
+```
 - deletes a unique fee rate for a certain `_tokenRequested -> _tokenOffered` pair.
 
-#### `setBaseFee`
-##### `(_fee)`
+```
+setBaseFee
+(_fee)
+```
 - sets a base fee rate for a all the token pairs which don't have unique fee rates.
 
-#### `setFeePayoutAddress`
-##### `(_addr)`
+```
+setFeePayoutAddress
+(_addr)
+```
 - sets an `_addr` which will receive the fees on behalf of escrowswap
