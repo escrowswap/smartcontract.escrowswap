@@ -15,6 +15,8 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     error OverTokenAmountLimit();
     error Unauthorized();
     error MisalignedTradeData();
+    error UnexpectedEtherTransfer();
+    error WrongAmountEtherTransfer();
 
     /// --------------------------------------
 
@@ -153,21 +155,32 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         _deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
 
-        //Transfer from buyer to seller.
-        _handleRelayTransfer(
+        //Transfer from buyer to seller and fee payment transfer.
+        _handleTakerTransfers(
             msg.sender,
             trade.amountRequested,
             trade.tokenRequested,
-            address(trade.seller)
+            address(trade.seller),
+            getTradingPairFee(_getTradingPairHash(trade.tokenRequested, trade.tokenOffered))
         );
 
+
+        //Transfer from buyer to seller.
+        //_handleRelayTransfer(
+          //  msg.sender,
+            //trade.amountRequested,
+         //   trade.tokenRequested,
+         //   address(trade.seller)
+        //);
+
         //Fee Payment calculation and exec.
-        _handleFeePayout(
-            msg.sender,
-            trade.amountRequested,
-            trade.tokenRequested,
-            trade.tokenOffered
-        );
+        //_handleFeePayout(
+        //    msg.sender,
+        //    trade.amountRequested,
+        //    trade.tokenRequested,
+        //    trade.tokenOffered
+        //);
+
 
         //Transfer from the vault to buyer.
         _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
@@ -209,7 +222,33 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ HELPER FUNCTIONS ------------
 
-    function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) private {
+    function _handleTakerTransfers(address _sender, uint256 _amountReq, address _tokenReq, address _dest, uint32 _tradingPairFee) private {
+        // Sometimes decimal number of a token is too low or it's not possible to calculate
+        // the fee without rounding it to ZERO.
+        // In that case we request 1 unit of the token to be sent as a fee.
+        uint256 fee = _tradingPairFee * _amountReq / BASE_FEE_DENOMINATOR;
+        if (fee == 0) {
+            fee = 1;
+        }
+
+        if (_tokenReq == address(0)) {
+            if (msg.value != _amountReq + fee) { revert WrongAmountEtherTransfer(); }
+
+            //transfer from buyer to seller
+            _handleEthTransfer(_dest, _amountReq);
+            //fee payment
+            _handleEthTransfer(feePayoutAddress, fee);
+        } else {
+            if (msg.value != 0) { revert UnexpectedEtherTransfer(); }
+
+            //transfer from buyer to seller
+            IERC20(_tokenReq).safeTransferFrom(_sender, _dest, _amountReq);
+            //fee payment
+            IERC20(_tokenReq).safeTransferFrom(_sender, feePayoutAddress, fee);
+        }
+    }
+
+    /* function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) private {
 
         // Sometimes decimal number of a token is too low or it's not possible to calculate
         // the fee without rounding it to ZERO.
@@ -226,13 +265,13 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             _tokenReq,
             feePayoutAddress
         );
-    }
+    } */
 
     function _handleIncomingTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
-            require(msg.value == _amount, "_handleIncomingTransfer msg value less than expected amount");
+            if (msg.value != _amount) { revert WrongAmountEtherTransfer(); }
         } else {
-            require(msg.value == 0, "_handleIncomingTransfer: Unexpected Ether transfer");
+            if (msg.value != 0) { revert UnexpectedEtherTransfer(); }
 
             // We must check the balance that was actually transferred to this contract,
             // as some tokens impose a transfer fee and would not actually transfer the
@@ -245,7 +284,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
+    /* function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
             require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
             _handleEthTransfer(_dest, _amount);
@@ -253,7 +292,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             require(msg.value == 0, "_handleIncomingTransfer: Unexpected Ether transfer");
             IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
         }
-    }
+    } */
 
     function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) private {
         // Handle ETH payment
