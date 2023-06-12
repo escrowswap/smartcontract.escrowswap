@@ -56,6 +56,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ CONSTRUCTOR ------------
 
+    //@dev _wethAddress for a multi-chain compatability
     constructor(address _wethAddress) {
         idCounter = 0;
 
