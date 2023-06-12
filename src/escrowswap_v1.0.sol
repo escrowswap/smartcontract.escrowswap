@@ -56,14 +56,14 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ CONSTRUCTOR ------------
 
-    constructor() {
+    constructor(address _wethAddress) {
         idCounter = 0;
 
         baseFee = 2_000; // 2000 / 100000 = 2.0%
         BASE_FEE_DENOMINATOR = 100_000;
         feePayoutAddress = owner();
 
-        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        weth = IWETH(_wethAddress);
         TOKEN_AMOUNT_LIMIT = 23158e69;
         isEmergencyWithdrawalActive = false;
     }
@@ -229,8 +229,10 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     function _handleIncomingTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
-            require(msg.value >= _amount, "_handleIncomingTransfer msg value less than expected amount");
+            require(msg.value == _amount, "_handleIncomingTransfer msg value less than expected amount");
         } else {
+            require(msg.value == 0, "_handleIncomingTransfer: Unexpected Ether transfer");
+
             // We must check the balance that was actually transferred to this contract,
             // as some tokens impose a transfer fee and would not actually transfer the
             // full amount to the escrowswap, resulting in potentially locked funds
@@ -247,6 +249,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
             _handleEthTransfer(_dest, _amount);
         } else {
+            require(msg.value == 0, "_handleIncomingTransfer: Unexpected Ether transfer");
             IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
         }
     }
