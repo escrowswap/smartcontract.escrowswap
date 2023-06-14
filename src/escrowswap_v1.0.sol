@@ -1,12 +1,14 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.18;
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "ExcessivelySafeCall/ExcessivelySafeCall.sol";
 import {IWETH} from "./resources/IWETH.sol";
 
 contract EscrowswapV1 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using ExcessivelySafeCall for address;
 
     /// ------------ CUSTOM ERRORS ------------
 
@@ -58,7 +60,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
 
     /// ------------ CONSTRUCTOR ------------
 
-    //@dev _wethAddress for a multi-chain compatability
+    //Set _wethAddress for a multi-chain compatability
     constructor(address _wethAddress) {
         idCounter = 0;
 
@@ -155,7 +157,7 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         _deleteTradeOffer(_id);
         emit TradeOfferAccepted(_id, msg.sender);
 
-        //Transfer from buyer to seller and fee payment transfer.
+        //Buyer transfers to seller, buyer pays the fee to the feePayoutAddress.
         _handleTakerTransfers(
             msg.sender,
             trade.amountRequested,
@@ -163,24 +165,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
             address(trade.seller),
             getTradingPairFee(_getTradingPairHash(trade.tokenRequested, trade.tokenOffered))
         );
-
-
-        //Transfer from buyer to seller.
-        //_handleRelayTransfer(
-          //  msg.sender,
-            //trade.amountRequested,
-         //   trade.tokenRequested,
-         //   address(trade.seller)
-        //);
-
-        //Fee Payment calculation and exec.
-        //_handleFeePayout(
-        //    msg.sender,
-        //    trade.amountRequested,
-        //    trade.tokenRequested,
-        //    trade.tokenOffered
-        //);
-
 
         //Transfer from the vault to buyer.
         _handleOutgoingTransfer(msg.sender, trade.amountOffered, trade.tokenOffered);
@@ -248,25 +232,6 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    /* function _handleFeePayout(address _sender, uint256 _amount, address _tokenReq, address _tokenOff) private {
-
-        // Sometimes decimal number of a token is too low or it's not possible to calculate
-        // the fee without rounding it to ZERO.
-        // In that case we request 1 unit of the token to be sent as a fee.
-        uint256 fee = getTradingPairFee(_getTradingPairHash(_tokenReq, _tokenOff)) * _amount / BASE_FEE_DENOMINATOR;
-        if (fee == 0) {
-            fee = 1;
-        }
-
-        // FEE Payment transaction
-        _handleRelayTransfer(
-            _sender,
-            fee,
-            _tokenReq,
-            feePayoutAddress
-        );
-    } */
-
     function _handleIncomingTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
         if (_token == address(0)) {
             if (msg.value != _amount) { revert WrongAmountEtherTransfer(); }
@@ -284,20 +249,9 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
         }
     }
 
-    /* function _handleRelayTransfer(address _sender, uint256 _amount, address _token, address _dest) private {
-        if (_token == address(0)) {
-            require(msg.value >= _amount, "_handleRelayTransfer msg value less than expected amount");
-            _handleEthTransfer(_dest, _amount);
-        } else {
-            require(msg.value == 0, "_handleIncomingTransfer: Unexpected Ether transfer");
-            IERC20(_token).safeTransferFrom(_sender, _dest, _amount);
-        }
-    } */
-
     function _handleOutgoingTransfer(address _dest, uint256 _amount, address _token) private {
         // Handle ETH payment
         if (_token == address(0)) {
-            require(address(this).balance >= _amount, "_handleOutgoingTransfer insolvent");
             _handleEthTransfer(_dest, _amount);
         } else {
             IERC20(_token).safeTransfer(_dest, _amount);
@@ -305,7 +259,12 @@ contract EscrowswapV1 is Ownable, ReentrancyGuard {
     }
 
     function _handleEthTransfer(address _dest, uint256 _amount) private {
-        (bool success, ) = _dest.call{value: _amount}("");
+        // Using excessivelySafeCall to avoid "returnbombs".
+        // Expecting only a single return bool value we specified a _maxCopy of 0 bytes.
+        // Refusing to copy large blobs to local memory effectively prevents
+        // the callee from triggering local OOG reversion in fallback function.
+        (bool success, ) = _dest.excessivelySafeCall(gasleft(), _amount, 0, "");
+
         // If the ETH transfer fails, wrap the ETH and try send it as WETH.
         if (!success) {
             weth.deposit{value: _amount}();
