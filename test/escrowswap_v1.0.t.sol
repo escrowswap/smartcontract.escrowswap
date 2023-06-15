@@ -38,7 +38,7 @@ contract EscrowswapV1Test is Test, BrokenToken {
     event TradeOfferCancelled(uint256 indexed id);
 
     function setUp() public {
-        escrowswap = new EscrowswapV1();
+        escrowswap = new EscrowswapV1(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
         //create aliases for signers
         sellerGood = vm.addr(1);

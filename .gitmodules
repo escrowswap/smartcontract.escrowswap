@@ -4,3 +4,6 @@
 [submodule "lib/brokentoken"]
 	path = lib/brokentoken
 	url = https://github.com/zeroknots/brokentoken
+[submodule "lib/ExcessivelySafeCall"]
+	path = lib/ExcessivelySafeCall
+	url = https://github.com/nomad-xyz/ExcessivelySafeCall
