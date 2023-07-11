@@ -5,4 +5,19 @@ libs = ['lib']
 optimizer = true
 optimizer_runs = 200
 
+[rpc_endpoints]
+goerli = "${GOERLI_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+mainnet = "${MAINNET_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
+mumbai = "${POLYGON_MUMBAI_RPC_URL}"
+bsc = "${BSC_RPC_URL}"
+bsc-testnet = "${BSC_TESTNET_RPC_URL}"
+optimism = "${OPTIMISM_RPC_URL}"
+optimism-goerli = "${OPTIMISM_TESTNET_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL}"
+arbitrum-goerli = "${ARBITRUM_TESTNET_URL}"
+
+[etherscan]
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
